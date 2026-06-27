@@ -2,14 +2,17 @@ import * as THREE from 'three'
 
 // ── tunables ──────────────────────────────────────────────────────────────────
 const GRAVITY        = 20    // m/s² downward acceleration
-const JUMP_SPEED     = 10    // m/s initial upward velocity on jump
+const JUMP_SPEED     = 8     // m/s initial upward velocity on jump
 const MOVE_SPEED     = 10    // m/s horizontal speed
-const GROUND_Y       = 0     // y of the ground plane (feet level)
+const GROUND_Y       = 0     // y of the ground plane (death plane)
+const SPAWN_POS      = { x: 5, y: 1, z: -5 }
 const PLAYER_WIDTH   = 0.4   // AABB width and depth for collision
 const PLAYER_HEIGHT  = 2.0   // AABB height (feet to top of head)
 const HAND_OFFSET_Y  = 1.5   // y above feet where hands are (for ledge detection)
 const LEDGE_REACH    = 0.4   // max distance below box top where hands can grab
 const LEDGE_H_MARGIN = 0.3   // horizontal margin outside box footprint still counts
+const COYOTE_TIME    = 0.12  // seconds after walking off edge where jump still works
+const MAX_AIR_JUMPS  = 1     // extra jumps allowed while airborne (double jump)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STATE = {
@@ -23,6 +26,8 @@ export class Physics {
     this.velocity = new THREE.Vector3()
     this._state   = STATE.GROUNDED
     this._hangTopY = 0
+    this._coyoteTimer = 0
+    this._airJumpsLeft = MAX_AIR_JUMPS
   }
 
   update(humanoid, moveDir, wDown, jumpPressed, delta, obstacles) {
@@ -36,15 +41,23 @@ export class Physics {
     // set, the player walked off a box edge and must fall.
     let supportedThisFrame = false
 
-    // 1. Jump — only from grounded
-    if (this._state === STATE.GROUNDED && jumpPressed) {
-      this.velocity.y = JUMP_SPEED
-      this._state = STATE.AIRBORNE
+    // 1. Jump — grounded, coyote time, or air jump
+    if (jumpPressed) {
+      if (this._state === STATE.GROUNDED || this._coyoteTimer > 0) {
+        this.velocity.y = JUMP_SPEED
+        this._state = STATE.AIRBORNE
+        this._coyoteTimer = 0
+        this._airJumpsLeft = MAX_AIR_JUMPS
+      } else if (this._state === STATE.AIRBORNE && this._airJumpsLeft > 0) {
+        this.velocity.y = JUMP_SPEED
+        this._airJumpsLeft--
+      }
     }
 
     // 2. Gravity — only while airborne
     if (this._state === STATE.AIRBORNE) {
       this.velocity.y -= GRAVITY * delta
+      if (this._coyoteTimer > 0) this._coyoteTimer -= delta
     }
 
     // 3. Horizontal velocity from input
@@ -58,11 +71,9 @@ export class Physics {
     // 4. Integrate position
     humanoid.position.addScaledVector(this.velocity, delta)
 
-    // 5. Ground plane clamp
+    // 5. Death plane — touching ground = respawn
     if (humanoid.position.y <= GROUND_Y) {
-      humanoid.position.y = GROUND_Y
-      this.velocity.y = 0
-      this._state = STATE.GROUNDED
+      this._respawn(humanoid)
       supportedThisFrame = true
     }
 
@@ -75,9 +86,16 @@ export class Physics {
       }
     }
 
-    // If GROUNDED but nothing supported the player this frame, they walked off a box.
+    // If GROUNDED but nothing supported the player this frame, they walked off an edge.
+    // Start coyote timer so they can still jump for a short window.
     if (this._state === STATE.GROUNDED && !supportedThisFrame) {
       this._state = STATE.AIRBORNE
+      this._coyoteTimer = COYOTE_TIME
+    }
+
+    // Reset air jumps when grounded
+    if (this._state === STATE.GROUNDED) {
+      this._airJumpsLeft = MAX_AIR_JUMPS
     }
 
     // 7. Ledge grab — only when airborne with W held
@@ -170,5 +188,17 @@ export class Physics {
     humanoid.position.y = this._hangTopY
     this.velocity.set(0, 0, 0)
     this._state = STATE.GROUNDED
+  }
+
+  _respawn(humanoid) {
+    humanoid.position.set(SPAWN_POS.x, SPAWN_POS.y, SPAWN_POS.z)
+    this.velocity.set(0, 0, 0)
+    this._state = STATE.GROUNDED
+    this._coyoteTimer = 0
+    this._airJumpsLeft = MAX_AIR_JUMPS
+  }
+
+  static spawnPosition() {
+    return SPAWN_POS
   }
 }

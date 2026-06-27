@@ -23,6 +23,8 @@ const { meshes: obstacleMeshes, obstacles } = createObstacles()
 obstacleMeshes.forEach(m => scene.add(m))
 
 const humanoid = createHumanoid()
+const spawn = Physics.spawnPosition()
+humanoid.position.set(spawn.x, spawn.y, spawn.z)
 scene.add(humanoid)
 
 // Controllers
