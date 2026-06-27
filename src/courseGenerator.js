@@ -362,6 +362,10 @@ export class CourseManager {
     return { index, startZ, platforms, meshes, obstacles }
   }
 
+  segmentBoundaries() {
+    return this._segments.map(s => s.startZ)
+  }
+
   updatePlatforms() {
     // no-op — material updates are now global via updatePlatformMaterials()
   }

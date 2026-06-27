@@ -141,6 +141,7 @@ function makeWireBox(w, h, d, color) {
 
 let obstacleHelpers = []
 let ledgeHelpers = []
+let seamHelpers = []
 let hitboxesVisible = false
 let kickHelper = null
 let _prevPW = config.PLAYER_WIDTH, _prevPH = config.PLAYER_HEIGHT
@@ -171,6 +172,7 @@ function rebuildPlayerHelper() {
 function rebuildObstacleHelpers() {
   obstacleHelpers.forEach(h => scene.remove(h))
   ledgeHelpers.forEach(h => scene.remove(h))
+  seamHelpers.forEach(h => scene.remove(h))
   const allObs = courses.flatMap(c => c.allObstacles)
   obstacleHelpers = allObs.map(({ aabb }) => {
     const size   = new THREE.Vector3()
@@ -194,6 +196,27 @@ function rebuildObstacleHelpers() {
     scene.add(h)
     return h
   })
+  // Segment zone rectangles on the ground between seams
+  seamHelpers = []
+  for (const c of courses) {
+    if (!c.segmentBoundaries) continue
+    const bounds = c.segmentBoundaries()
+    for (let i = 0; i < bounds.length; i++) {
+      const z0 = bounds[i]
+      const z1 = i + 1 < bounds.length ? bounds[i + 1] : z0 - config.SEGMENT_DEPTH
+      const depth = Math.abs(z0 - z1)
+      const midZ = (z0 + z1) / 2
+      const seamMat = new THREE.LineBasicMaterial({ color: 0xff00ff, depthTest: false })
+      const seamGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(config.CORRIDOR_WIDTH, depth))
+      const seam = new THREE.LineSegments(seamGeo, seamMat)
+      seam.rotation.x = -Math.PI / 2
+      seam.position.set(0, 0.05, midZ)
+      seam.renderOrder = 999
+      seam.visible = hitboxesVisible
+      scene.add(seam)
+      seamHelpers.push(seam)
+    }
+  }
 }
 
 window.addEventListener('keydown', (e) => {
@@ -201,6 +224,7 @@ window.addEventListener('keydown', (e) => {
     hitboxesVisible = !hitboxesVisible
     obstacleHelpers.forEach(h => { h.visible = hitboxesVisible })
     ledgeHelpers.forEach(h => { h.visible = hitboxesVisible })
+    seamHelpers.forEach(h => { h.visible = hitboxesVisible })
     upperHelper.visible = hitboxesVisible
     lowerHelper.visible = hitboxesVisible
   }
