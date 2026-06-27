@@ -57,7 +57,7 @@ export class Movement {
 
   _setupTouch() {
     window.addEventListener('touchstart', (e) => {
-      if (e.target.closest('#fullscreen-btn, #cam-mode-btn')) return
+      if (e.target.closest('#fullscreen-btn, #cam-mode-btn, #joystick-left')) return
       e.preventDefault()
       this._touching = true
 
@@ -77,7 +77,7 @@ export class Movement {
     }, { passive: false })
 
     window.addEventListener('touchend', (e) => {
-      if (e.target.closest('#fullscreen-btn, #cam-mode-btn')) return
+      if (e.target.closest('#fullscreen-btn, #cam-mode-btn, #joystick-left')) return
       e.preventDefault()
       if (e.touches.length > 0) return
       this._touching = false

@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import config from './config.js'
 import { isMobile } from './mobile.js'
+import { TouchJoystick } from './touchJoystick.js'
 
 const DEV_MODES = ['first-person', 'third-person', 'free']
 const PROD_MODES = ['first-person']
@@ -65,8 +66,9 @@ export class CameraController {
     this._orbit.enableDamping = true
     this._orbit.enabled = false
 
+    this._joystick = null
     if (isMobile) {
-      this._setupTouchLook(domElement)
+      this._joystick = new TouchJoystick({ side: 'left', radius: 50 })
     } else {
       domElement.addEventListener('mousedown', () => this._requestLock())
       document.addEventListener('mousemove', (e) => this._onMouseMove(e))
@@ -91,38 +93,6 @@ export class CameraController {
   set animator(a) { this._animator = a }
 
   get _isLocked() { return document.pointerLockElement === this._domElement }
-
-  _setupTouchLook(domElement) {
-    this._touchPrevX = new Map()
-
-    domElement.addEventListener('touchstart', (e) => {
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i]
-        this._touchPrevX.set(t.identifier, t.clientX)
-      }
-    }, { passive: true })
-
-    domElement.addEventListener('touchmove', (e) => {
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        const t = e.changedTouches[i]
-        const prevX = this._touchPrevX.get(t.identifier)
-        if (prevX === undefined) continue
-        const dx = t.clientX - prevX
-        this._touchPrevX.set(t.identifier, t.clientX)
-
-        const sensitivity = config.CAMERA_SENSITIVITY * 1.5
-        this._yaw -= dx * sensitivity
-      }
-    }, { passive: true })
-
-    const endTouch = (e) => {
-      for (let i = 0; i < e.changedTouches.length; i++) {
-        this._touchPrevX.delete(e.changedTouches[i].identifier)
-      }
-    }
-    domElement.addEventListener('touchend', endTouch, { passive: true })
-    domElement.addEventListener('touchcancel', endTouch, { passive: true })
-  }
 
   _requestLock() {
     if (this.mode !== 'free') this._domElement.requestPointerLock()
@@ -175,6 +145,13 @@ export class CameraController {
   }
 
   update() {
+    if (this._joystick && this._joystick.active && this.mode !== 'free') {
+      const speed = 2.5
+      this._yaw -= this._joystick.dx * speed * 0.016
+      this._pitch -= this._joystick.dy * speed * 0.016
+      this._pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, this._pitch))
+    }
+
     const h = this._humanoid
 
     if (this.mode === 'first-person') {
