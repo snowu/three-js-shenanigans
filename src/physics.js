@@ -30,7 +30,7 @@ export class Physics {
     this._airJumpsLeft = MAX_AIR_JUMPS
   }
 
-  update(humanoid, moveDir, wDown, jumpPressed, delta, obstacles) {
+  update(humanoid, moveDir, wDown, jumpPressed, delta, obstacles, wallAABBs = []) {
     // Snapshot hanging state before any transitions this frame.
     // This prevents grab (step 7) and pull-up (step 8) firing in the same frame
     // when W is held: the player grabs on frame N, pulls up on frame N+1.
@@ -84,6 +84,11 @@ export class Physics {
       for (const { aabb } of obstacles) {
         if (this._resolveAABB(humanoid, aabb)) supportedThisFrame = true
       }
+    }
+
+    // Wall collision — horizontal push only, walls never support
+    for (const aabb of wallAABBs) {
+      this._resolveAABB(humanoid, aabb)
     }
 
     // If GROUNDED but nothing supported the player this frame, they walked off an edge.

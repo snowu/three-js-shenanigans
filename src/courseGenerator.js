@@ -1,6 +1,6 @@
 // Constraint-solver procedural platform generator with infinite corridor.
 // Generates corridor segments with platforms inside them.
-// New segments spawn as player advances; old ones get cleaned up.
+// New segments spawn as player advances forward.
 
 const GRAVITY    = 20
 const JUMP_SPEED = 8
@@ -18,13 +18,13 @@ const CORRIDOR_WIDTH  = 14
 const CORRIDOR_HEIGHT = 12
 const SEGMENT_DEPTH   = 40
 const WALL_THICKNESS  = 0.5
-const GENERATE_AHEAD  = 3   // segments ahead of player to keep generated
-const CLEANUP_BEHIND  = 2   // segments behind player to keep before removing
+const GENERATE_AHEAD  = 3
+const MIN_PLATFORM_SPACING = 1.5
 
 const DIFFICULTY = {
-  easy:   { heightFraction: 0.5, rangeFraction: 0.5, minGap: 2, maxGap: 4, doubleJumpChance: 0,   platformsPerSegment: [3, 5] },
-  medium: { heightFraction: 0.7, rangeFraction: 0.7, minGap: 3, maxGap: 6, doubleJumpChance: 0.2, platformsPerSegment: [4, 6] },
-  hard:   { heightFraction: 0.9, rangeFraction: 0.9, minGap: 4, maxGap: 8, doubleJumpChance: 0.4, platformsPerSegment: [5, 8] },
+  easy:   { heightFraction: 0.5, rangeFraction: 0.5, minGap: 2, maxGap: 4, doubleJumpChance: 0,   platformsPerSegment: [4, 7] },
+  medium: { heightFraction: 0.7, rangeFraction: 0.7, minGap: 3, maxGap: 6, doubleJumpChance: 0.2, platformsPerSegment: [5, 8] },
+  hard:   { heightFraction: 0.9, rangeFraction: 0.9, minGap: 4, maxGap: 8, doubleJumpChance: 0.4, platformsPerSegment: [6, 10] },
 }
 
 function rand(min, max) {
@@ -39,19 +39,34 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v))
 }
 
-// Generate platforms for one corridor segment.
-// prevPlatform: last platform from previous segment (or null for first).
-// segmentStartZ: z where this segment starts (going into -z).
+function nudgeAwayFromAll(plat, allPlatforms, halfW) {
+  for (let pass = 0; pass < 3; pass++) {
+    for (const other of allPlatforms) {
+      const gapX = Math.max(0, Math.abs(plat.x - other.x) - plat.w / 2 - other.w / 2)
+      const gapZ = Math.max(0, Math.abs(plat.z - other.z) - plat.d / 2 - other.d / 2)
+      const gapY = Math.max(0, Math.abs(plat.y - other.y) - plat.h / 2 - other.h / 2)
+      const dist = Math.sqrt(gapX * gapX + gapZ * gapZ + gapY * gapY)
+      if (dist < MIN_PLATFORM_SPACING) {
+        const push = MIN_PLATFORM_SPACING - dist + 0.5
+        // Push forward (-z) and laterally away
+        plat.z = Math.round((plat.z - push * 0.7) * 10) / 10
+        const lateralDir = plat.x >= other.x ? 1 : -1
+        plat.x = Math.round(clamp(plat.x + lateralDir * push * 0.5, -halfW, halfW) * 10) / 10
+        plat.y = Math.round(clamp(plat.y + push * 0.3, plat.h / 2 + 0.5, CORRIDOR_HEIGHT - 2) * 10) / 10
+      }
+    }
+  }
+}
+
 function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'medium') {
   const diff = DIFFICULTY[difficulty] || DIFFICULTY.medium
   const count = randInt(diff.platformsPerSegment[0], diff.platformsPerSegment[1])
   const platforms = []
 
-  const halfW = CORRIDOR_WIDTH / 2 - 1 // keep platforms away from walls
+  const halfW = CORRIDOR_WIDTH / 2 - 1
 
   let prev = prevPlatform
   if (!prev) {
-    // First segment — spawn platform
     prev = { w: 3, h: 1, d: 3, x: 0, y: 0.5, z: segmentStartZ - 3 }
     platforms.push(prev)
   }
@@ -67,13 +82,23 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
     const maxUp   = maxHeight * diff.heightFraction
     const maxDown = Math.min(MAX_DROP, prevTopY - 0.5)
-    const dy = rand(-maxDown * 0.3, maxUp)
+
+    // More height variation: bias toward bigger changes
+    const heightRoll = Math.random()
+    let dy
+    if (heightRoll < 0.3) {
+      dy = rand(-maxDown * 0.5, -maxDown * 0.1)  // drop
+    } else if (heightRoll < 0.7) {
+      dy = rand(maxUp * 0.2, maxUp * 0.7)         // moderate climb
+    } else {
+      dy = rand(maxUp * 0.7, maxUp)                // big climb
+    }
 
     const gap = rand(diff.minGap, diff.maxGap)
     const hDist = Math.min(gap, maxRange * diff.rangeFraction)
 
-    // Bias forward (-z) within corridor
-    const forwardDist = rand(hDist * 0.5, hDist)
+    const minForward = SEGMENT_DEPTH / (count + 1) * 0.5
+    const forwardDist = rand(Math.max(minForward, hDist * 0.5), hDist)
     const lateralDist = rand(-hDist * 0.6, hDist * 0.6)
 
     const sizeScale = needsDoubleJump ? 0.8 : 1.0
@@ -87,11 +112,8 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     let pz = prev.z - forwardDist
     let py = Math.max(h / 2, newTopY)
 
-    // Keep within segment bounds
     pz = clamp(pz, segmentEndZ + d / 2, segmentStartZ - d / 2)
-
-    // Clamp height within corridor
-    py = clamp(py, h / 2, CORRIDOR_HEIGHT - h / 2 - 1)
+    py = clamp(py, h / 2 + 0.5, CORRIDOR_HEIGHT - h / 2 - 1)
 
     const plat = {
       w: Math.round(w * 10) / 10,
@@ -118,19 +140,11 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     const platTopY = plat.y + plat.h / 2
     const heightDiff = platTopY - prevTopY
     if (heightDiff > maxHeight * diff.heightFraction) {
-      plat.y = Math.round(clamp(prevTopY + maxHeight * diff.heightFraction * 0.8, h / 2, CORRIDOR_HEIGHT - 2) * 10) / 10
+      plat.y = Math.round(clamp(prevTopY + maxHeight * diff.heightFraction * 0.8, h / 2 + 0.5, CORRIDOR_HEIGHT - 2) * 10) / 10
     }
 
-    // Don't overlap previous
-    const overlapX = (prev.w / 2 + plat.w / 2) - Math.abs(plat.x - prev.x)
-    const overlapZ = (prev.d / 2 + plat.d / 2) - Math.abs(plat.z - prev.z)
-    if (overlapX > 0 && overlapZ > 0) {
-      if (overlapX < overlapZ) {
-        plat.x = Math.round(clamp(plat.x + (plat.x >= prev.x ? 1 : -1) * (overlapX + 0.5), -halfW, halfW) * 10) / 10
-      } else {
-        plat.z = Math.round((plat.z + (plat.z <= prev.z ? -1 : 1) * (overlapZ + 0.5)) * 10) / 10
-      }
-    }
+    // Nudge away from overlapping platforms
+    nudgeAwayFromAll(plat, platforms, halfW)
 
     platforms.push(plat)
     prev = plat
@@ -142,9 +156,10 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 export class CourseManager {
   constructor(difficulty = 'medium') {
     this._difficulty = difficulty
-    this._segments = []          // { index, startZ, platforms, meshes, walls, obstacles }
+    this._segments = []
     this._nextSegmentIndex = 0
     this._lastPlatform = null
+    this._furthestZ = 0
   }
 
   get allObstacles() {
@@ -163,13 +178,14 @@ export class CourseManager {
     return out
   }
 
-  // Call each frame with player z position. Returns { added, removed } mesh arrays.
   update(playerZ, scene, THREE) {
-    const playerSegment = Math.floor(-playerZ / SEGMENT_DEPTH)
-    const added = []
-    const removed = []
+    // Track furthest forward position
+    if (playerZ < this._furthestZ) this._furthestZ = playerZ
 
-    // Generate segments ahead
+    const playerSegment = Math.floor(-this._furthestZ / SEGMENT_DEPTH)
+    const added = []
+
+    // Generate segments ahead of furthest reached position
     while (this._nextSegmentIndex <= playerSegment + GENERATE_AHEAD) {
       const seg = this._createSegment(THREE)
       this._segments.push(seg)
@@ -177,19 +193,8 @@ export class CourseManager {
       for (const m of seg.walls) { scene.add(m); added.push(m) }
     }
 
-    // Cleanup old segments
-    while (this._segments.length > 0) {
-      const oldest = this._segments[0]
-      if (oldest.index < playerSegment - CLEANUP_BEHIND) {
-        this._segments.shift()
-        for (const m of oldest.meshes) { scene.remove(m); removed.push(m) }
-        for (const m of oldest.walls) { scene.remove(m); removed.push(m) }
-      } else {
-        break
-      }
-    }
-
-    return { added, removed }
+    // No cleanup — segments persist when going backward
+    return { added, removed: [] }
   }
 
   _createSegment(THREE) {
@@ -216,13 +221,11 @@ export class CourseManager {
       obstacles.push({ mesh, aabb })
     })
 
-    // Corridor walls
     const walls = []
     const wallAABBs = []
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.9 })
     const midZ = startZ - SEGMENT_DEPTH / 2
 
-    // Left wall
     const leftWall = new THREE.Mesh(
       new THREE.BoxGeometry(WALL_THICKNESS, CORRIDOR_HEIGHT, SEGMENT_DEPTH),
       wallMat
@@ -231,7 +234,6 @@ export class CourseManager {
     walls.push(leftWall)
     wallAABBs.push(new THREE.Box3().setFromObject(leftWall))
 
-    // Right wall
     const rightWall = new THREE.Mesh(
       new THREE.BoxGeometry(WALL_THICKNESS, CORRIDOR_HEIGHT, SEGMENT_DEPTH),
       wallMat
@@ -240,13 +242,13 @@ export class CourseManager {
     walls.push(rightWall)
     wallAABBs.push(new THREE.Box3().setFromObject(rightWall))
 
-    // Back wall only on first segment
     if (index === 0) {
       const backWall = new THREE.Mesh(
         new THREE.BoxGeometry(CORRIDOR_WIDTH + WALL_THICKNESS * 2, CORRIDOR_HEIGHT, WALL_THICKNESS),
         wallMat
       )
-      backWall.position.set(0, CORRIDOR_HEIGHT / 2, startZ + WALL_THICKNESS / 2)
+      backWall.position.set(0, CORRIDOR_HEIGHT / 2, startZ + 8 + WALL_THICKNESS / 2)
+      backWall.visible = false
       walls.push(backWall)
       wallAABBs.push(new THREE.Box3().setFromObject(backWall))
     }
