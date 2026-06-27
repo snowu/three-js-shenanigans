@@ -33,6 +33,34 @@ const movement = new Movement()
 const physics  = new Physics()
 const cameraController = new CameraController(camera, renderer.domElement, humanoid, scene)
 const animator = new HumanoidAnimator(joints, physics)
+cameraController.animator = animator
+
+// Score tracking
+const scoreEl = document.getElementById('score-current')
+const bestEl = document.getElementById('score-best')
+let score = 0
+let bestScore = 0
+const touchedBoxes = new Set()
+
+physics.onBoxLand = (obs) => {
+  if (obs.isSpawn || touchedBoxes.has(obs)) return
+  touchedBoxes.add(obs)
+  score++
+  scoreEl.textContent = score
+  if (score > bestScore) {
+    bestScore = score
+    bestEl.textContent = bestScore
+  }
+}
+
+physics.onGroundHit = () => {
+  score = 0
+  scoreEl.textContent = score
+  touchedBoxes.clear()
+  if (cameraController.mode === 'first-person') {
+    physics._respawn(humanoid)
+  }
+}
 
 // Debug hitboxes — toggle with H
 

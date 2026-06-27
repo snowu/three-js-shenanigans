@@ -46,11 +46,5 @@ export const ANIM_IDLE_ARM_ANGLE    = 0.09   // ~5° rest splay
 export const ANIM_RUN_LEG_AMPLITUDE = 0.8    // radians max leg swing
 export const ANIM_RUN_ARM_AMPLITUDE = 0.6    // radians max arm swing
 export const ANIM_RUN_FREQ_SCALE    = 1.2    // multiplied by horizontal speed
-export const ANIM_RUN_LEAN_MAX      = 0.15   // radians forward lean at full speed
-
-export const ANIM_FACING_LERP_RATE  = 12     // radians/s turn speed
-
 export const ANIM_LANDING_DURATION  = 0.15   // seconds
 export const ANIM_PULLUP_DURATION   = 0.3    // seconds
-export const ANIM_SPIN_DURATION     = 0.3    // seconds
-export const ANIM_CROSSFADE_TIME    = 0.15   // seconds for mixer crossfade

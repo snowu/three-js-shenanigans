@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
-const MODES = ['first-person', 'free']
+const DEV_MODES = ['first-person', 'third-person', 'free']
+const PROD_MODES = ['first-person']
 
 const FREE_CAM_HEIGHT = 80
 const FREE_CAM_DISTANCE = 10
@@ -12,10 +13,12 @@ export class CameraController {
     this._domElement = domElement
     this._humanoid = humanoid
     this._scene = scene
+    this._modes = window.DEV_MODE ? DEV_MODES : PROD_MODES
     this._modeIndex = 0
     this._yaw = 0
     this._pitch = 0
     this._skipWarpEvent = false
+    this._animator = null
 
     camera.position.set(0, 3, 5)
     camera.lookAt(0, 1, 0)
@@ -39,9 +42,11 @@ export class CameraController {
     })
   }
 
-  get mode() { return MODES[this._modeIndex] }
+  get mode() { return this._modes[this._modeIndex] }
 
   get cameraYaw() { return this._yaw }
+
+  set animator(a) { this._animator = a }
 
   get _isLocked() { return document.pointerLockElement === this._domElement }
 
@@ -50,7 +55,7 @@ export class CameraController {
   }
 
   _cycleMode() {
-    this._modeIndex = (this._modeIndex + 1) % MODES.length
+    this._modeIndex = (this._modeIndex + 1) % this._modes.length
     this._yaw = 0
     this._pitch = 0
     if (this.mode === 'free') {
@@ -97,10 +102,21 @@ export class CameraController {
     const h = this._humanoid
 
     if (this.mode === 'first-person') {
-      this._camera.position.set(h.position.x, h.position.y + 1.75, h.position.z)
+      const eyeY = h.position.y + 1.75 + (this._animator ? this._animator.cameraYOffset : 0)
+      this._camera.position.set(h.position.x, eyeY, h.position.z)
       this._camera.rotation.order = 'YXZ'
       this._camera.rotation.set(this._pitch, this._yaw, 0)
       h.rotation.y = this._yaw
+
+    } else if (this.mode === 'third-person') {
+      this._camera.up.set(0, 1, 0)
+      this._camera.position.set(
+        h.position.x + 5 * Math.sin(this._yaw),
+        h.position.y + 3,
+        h.position.z + 5 * Math.cos(this._yaw)
+      )
+      this._camera.lookAt(h.position.x, h.position.y + 1, h.position.z)
+
     } else {
       this._orbit.update()
     }

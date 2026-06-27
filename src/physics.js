@@ -23,6 +23,9 @@ export class Physics {
     this.onGrab = null
     this.onPullUp = null
     this.onDoubleJump = null
+    this.onGroundHit = null
+    this.onBoxLand = null
+    this._landedOnGround = false
   }
 
   get state() { return this._state }
@@ -32,8 +35,8 @@ export class Physics {
   }
 
   update(humanoid, moveDir, wDown, sDown, jumpPressed, delta, obstacles, wallAABBs = []) {
-    // Snapshot hanging state before any transitions this frame.
-    // Prevents grab and pull-up firing in the same frame when W is held.
+    this._landedOnGround = false
+
     const wasHanging = this._state === STATE.HANGING
 
     // Reset each frame; set in ground/collision steps. If GROUNDED at end
@@ -83,15 +86,20 @@ export class Physics {
         this.velocity.y = 0
         if (this._state !== STATE.GROUNDED) {
           this._state = STATE.GROUNDED
+          this._landedOnGround = true
           if (this.onLand) this.onLand()
+          if (this.onGroundHit) this.onGroundHit()
         }
         supportedThisFrame = true
       }
 
       // AABB collision vs obstacles
       if (this._state !== STATE.HANGING) {
-        for (const { aabb } of obstacles) {
-          if (this._resolveAABB(humanoid, aabb)) supportedThisFrame = true
+        for (const obs of obstacles) {
+          if (this._resolveAABB(humanoid, obs.aabb)) {
+            supportedThisFrame = true
+            if (!this._landedOnGround && this.onBoxLand) this.onBoxLand(obs)
+          }
         }
       }
 

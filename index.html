@@ -10,6 +10,18 @@
     </style>
   </head>
   <body>
+    <div id="score-hud" style="
+      position: fixed; top: 20px; right: 20px;
+      font-family: monospace; font-size: 18px; color: #fff;
+      text-align: right; pointer-events: none; user-select: none;
+      text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    ">
+      <div>Score: <span id="score-current">0</span></div>
+      <div style="font-size: 14px; color: #aaa;">Best: <span id="score-best">0</span></div>
+    </div>
+    <script>
+      window.DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

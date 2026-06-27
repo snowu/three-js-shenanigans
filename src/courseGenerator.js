@@ -7,6 +7,7 @@ import {
 
 const MAX_DROP = 8
 const MIN_PLATFORM_SPACING = 1.5
+const FIRST_PLATFORM_GAP = 6
 
 const DIFFICULTY = {
   easy:   { heightFraction: 0.5, rangeFraction: 0.5, minGap: 2, maxGap: 4, doubleJumpChance: 0,   platformsPerSegment: [4, 7] },
@@ -45,7 +46,7 @@ function nudgeAwayFromAll(plat, allPlatforms, halfW) {
   }
 }
 
-function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'medium') {
+function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'medium', isFirstSegment = false) {
   const diff = DIFFICULTY[difficulty] || DIFFICULTY.medium
   const count = randInt(diff.platformsPerSegment[0], diff.platformsPerSegment[1])
   const platforms = []
@@ -55,20 +56,25 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
   let prev = prevPlatform
   if (!prev) {
-    prev = { w: 3, h: 1, d: 3, x: 0, y: 0.5, z: segmentStartZ - 3 }
+    prev = { w: 3, h: 1, d: 3, x: 0, y: 0.5, z: segmentStartZ - 3, isSpawn: true }
     platforms.push(prev)
   }
+
+  const WARMUP_COUNT = isFirstSegment ? 4 : 0
 
   // Distribute z positions evenly across this segment, with jitter
   const slotDepth = SEGMENT_DEPTH / count
   for (let i = 0; i < count; i++) {
     const prevTopY = prev.y + prev.h / 2
 
-    const needsDoubleJump = Math.random() < diff.doubleJumpChance
+    // Warmup ramp: first N platforms in first segment are tamer
+    const warmupT = (isFirstSegment && i < WARMUP_COUNT) ? (i + 1) / WARMUP_COUNT : 1.0
+
+    const needsDoubleJump = warmupT < 1 ? false : Math.random() < diff.doubleJumpChance
     const maxHeight = needsDoubleJump ? DOUBLE_JUMP_HEIGHT : SINGLE_JUMP_HEIGHT
 
-    const maxUp   = maxHeight * diff.heightFraction
-    const maxDown = Math.min(MAX_DROP, prevTopY - 0.5)
+    const maxUp   = maxHeight * diff.heightFraction * warmupT
+    const maxDown = Math.min(MAX_DROP, prevTopY - 0.5) * warmupT
 
     const heightRoll = Math.random()
     let dy
@@ -81,17 +87,20 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     }
 
     const sizeScale = needsDoubleJump ? 0.8 : 1.0
-    const w = rand(1.5, 3) * sizeScale
+    const warmupSizeBonus = warmupT < 1 ? 1 + (1 - warmupT) * 0.5 : 1.0
+    const w = rand(1.5, 3) * sizeScale * warmupSizeBonus
     const h = rand(0.5, 2)
-    const d = rand(1.5, 3) * sizeScale
+    const d = rand(1.5, 3) * sizeScale * warmupSizeBonus
 
     // Z: evenly spaced slot with random jitter within slot
-    const slotStart = segmentStartZ - i * slotDepth
-    const slotEnd = segmentStartZ - (i + 1) * slotDepth
+    const zOffset = isFirstSegment ? FIRST_PLATFORM_GAP : 0
+    const slotStart = segmentStartZ - zOffset - i * slotDepth
+    const slotEnd = segmentStartZ - zOffset - (i + 1) * slotDepth
     const pz = rand(slotEnd + d / 2 + 0.5, slotStart - d / 2 - 0.5)
 
     // X: lateral offset from prev, clamped to corridor
-    const lateralRange = Math.min(6, CORRIDOR_WIDTH / 2 - 1)
+    const baseLateralRange = Math.min(6, CORRIDOR_WIDTH / 2 - 1)
+    const lateralRange = baseLateralRange * warmupT
     const px = clamp(prev.x + rand(-lateralRange, lateralRange), -halfW + w / 2, halfW - w / 2)
 
     const newTopY = prevTopY + dy
@@ -176,7 +185,7 @@ export class CourseManager {
     const startZ = -index * SEGMENT_DEPTH
 
     const { platforms, lastPlatform } = generateSegmentPlatforms(
-      this._lastPlatform, startZ, this._difficulty
+      this._lastPlatform, startZ, this._difficulty, index === 0
     )
     this._lastPlatform = lastPlatform
 
@@ -192,7 +201,7 @@ export class CourseManager {
       mesh.position.set(b.x, b.y, b.z)
       const aabb = new THREE.Box3().setFromObject(mesh)
       meshes.push(mesh)
-      obstacles.push({ mesh, aabb })
+      obstacles.push({ mesh, aabb, isSpawn: !!b.isSpawn })
     })
 
     const walls = []
