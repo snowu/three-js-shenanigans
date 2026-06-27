@@ -278,6 +278,7 @@ function buildUniforms() {
 }
 
 let lavaMaterial
+let lavaPlane
 
 export function createGround() {
   const group = new THREE.Group()
@@ -289,19 +290,23 @@ export function createGround() {
     side: THREE.FrontSide,
   })
 
-  const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(200, 2000, 100, 500),
+  lavaPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(400, 400, 200, 200),
     lavaMaterial
   )
-  plane.rotation.x = -Math.PI / 2
-  plane.position.set(0, -0.1, -500)
-  group.add(plane)
+  lavaPlane.rotation.x = -Math.PI / 2
+  lavaPlane.position.set(0, -0.1, 0)
+  group.add(lavaPlane)
 
   return group
 }
 
-export function updateGround(time) {
+export function updateGround(time, playerX, playerZ) {
   if (lavaMaterial) {
     lavaMaterial.uniforms.time.value = time
+  }
+  if (lavaPlane) {
+    lavaPlane.position.x = playerX
+    lavaPlane.position.z = playerZ
   }
 }

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { scene, camera, renderer, timer } from './scene.js'
+import { scene, camera, renderer, timer, updateSky } from './scene.js'
 import { createHumanoid } from './humanoid.js'
 import { Movement } from './movement.js'
 import { CameraController } from './cameraController.js'
@@ -129,7 +129,8 @@ function animate(timestamp) {
     humanoid.position.z
   )
 
-  updateGround(timestamp * 0.001)
+  updateGround(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
+  updateSky(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   renderer.render(scene, camera)
 }
 animate()

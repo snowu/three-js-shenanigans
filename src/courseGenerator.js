@@ -1,5 +1,5 @@
 import {
-  MOVE_SPEED, CORRIDOR_WIDTH, CORRIDOR_HEIGHT, SEGMENT_DEPTH, WALL_THICKNESS,
+  MOVE_SPEED, CORRIDOR_WIDTH, CORRIDOR_HEIGHT, SEGMENT_DEPTH,
   FOG_END, GENERATE_TIME_AHEAD,
   SINGLE_JUMP_HEIGHT, DOUBLE_JUMP_HEIGHT,
   MAX_H_RANGE_SINGLE, MAX_H_RANGE_DOUBLE,
@@ -151,11 +151,7 @@ export class CourseManager {
   }
 
   get allWallAABBs() {
-    const out = []
-    for (const seg of this._segments) {
-      for (const w of seg.wallAABBs) out.push(w)
-    }
-    return out
+    return []
   }
 
   update(playerZ, currentSpeed, scene, THREE) {
@@ -173,7 +169,6 @@ export class CourseManager {
       const seg = this._createSegment(THREE)
       this._segments.push(seg)
       for (const m of seg.meshes) { scene.add(m); added.push(m) }
-      for (const m of seg.walls) { scene.add(m); added.push(m) }
     }
 
     return { added, removed: [] }
@@ -204,39 +199,7 @@ export class CourseManager {
       obstacles.push({ mesh, aabb, isSpawn: !!b.isSpawn })
     })
 
-    const walls = []
-    const wallAABBs = []
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.9 })
-    const midZ = startZ - SEGMENT_DEPTH / 2
-
-    const leftWall = new THREE.Mesh(
-      new THREE.BoxGeometry(WALL_THICKNESS, CORRIDOR_HEIGHT, SEGMENT_DEPTH),
-      wallMat
-    )
-    leftWall.position.set(-CORRIDOR_WIDTH / 2 - WALL_THICKNESS / 2, CORRIDOR_HEIGHT / 2, midZ)
-    walls.push(leftWall)
-    wallAABBs.push(new THREE.Box3().setFromObject(leftWall))
-
-    const rightWall = new THREE.Mesh(
-      new THREE.BoxGeometry(WALL_THICKNESS, CORRIDOR_HEIGHT, SEGMENT_DEPTH),
-      wallMat
-    )
-    rightWall.position.set(CORRIDOR_WIDTH / 2 + WALL_THICKNESS / 2, CORRIDOR_HEIGHT / 2, midZ)
-    walls.push(rightWall)
-    wallAABBs.push(new THREE.Box3().setFromObject(rightWall))
-
-    if (index === 0) {
-      const backWall = new THREE.Mesh(
-        new THREE.BoxGeometry(CORRIDOR_WIDTH + WALL_THICKNESS * 2, CORRIDOR_HEIGHT, WALL_THICKNESS),
-        wallMat
-      )
-      backWall.position.set(0, CORRIDOR_HEIGHT / 2, startZ + 8 + WALL_THICKNESS / 2)
-      backWall.visible = false
-      walls.push(backWall)
-      wallAABBs.push(new THREE.Box3().setFromObject(backWall))
-    }
-
-    return { index, startZ, platforms, meshes, walls, wallAABBs, obstacles }
+    return { index, startZ, platforms, meshes, obstacles }
   }
 
 }
