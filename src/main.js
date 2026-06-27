@@ -17,7 +17,7 @@ const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
 
 // --- Lights ---
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.1)
 scene.add(ambientLight)
 
 const dirLight = new THREE.DirectionalLight(0xffffff, 1)
