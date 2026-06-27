@@ -20,7 +20,7 @@ const config = {
   LEDGE_H_MARGIN: 0.3,
   LEDGE_GRAB_EXTEND: 0.8,
   LEDGE_PULLUP_TIME: 1.0,
-  LEDGE_PULLUP_SPEED: 6,
+  LEDGE_PULLUP_SPEED: 7,
 
   // ── kick (E mid-air) ──────────────────────────────────────────────────────
   KICK_LEG_REACH:   1.2,   // how far legs extend forward from player center
