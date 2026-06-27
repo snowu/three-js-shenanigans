@@ -4,7 +4,7 @@ import {
   SINGLE_JUMP_HEIGHT, DOUBLE_JUMP_HEIGHT,
   MAX_H_RANGE_SINGLE, MAX_H_RANGE_DOUBLE,
   BILLBOARD_WIDTH, BILLBOARD_HEIGHT, BILLBOARD_DEPTH,
-  BILLBOARD_X_OFFSET, BILLBOARD_GAP_EVERY, BILLBOARD_GAP_SIZE, BILLBOARD_Y_OFFSET,
+  BILLBOARD_X_OFFSET, BILLBOARD_GAP_EVERY, BILLBOARD_GAP_SIZE, BILLBOARD_Y_OFFSET, BILLBOARD_HITBOX_PAD,
 } from './config.js'
 
 const MAX_DROP = 8
@@ -144,6 +144,24 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
       plat.y = Math.round(clamp(prevTopY + maxReachHeight * 0.8, h / 2 + 0.5, CORRIDOR_HEIGHT - 2) * 10) / 10
     }
 
+    // Prevent platform from clipping into any billboard
+    for (const bb of billboards) {
+      const bbMinZ = bb.z - BILLBOARD_DEPTH / 2
+      const bbMaxZ = bb.z + BILLBOARD_DEPTH / 2
+      const platMinZ = plat.z - plat.d / 2
+      const platMaxZ = plat.z + plat.d / 2
+      if (platMaxZ <= bbMinZ || platMinZ >= bbMaxZ) continue
+      const bbInnerEdge = bb.side * BILLBOARD_X_OFFSET - bb.side * (BILLBOARD_WIDTH / 2 + BILLBOARD_HITBOX_PAD)
+      const margin = 0.5
+      if (bb.side > 0) {
+        const limit = bbInnerEdge - margin - plat.w / 2
+        if (plat.x > limit) plat.x = Math.round(limit * 10) / 10
+      } else {
+        const limit = bbInnerEdge + margin + plat.w / 2
+        if (plat.x < limit) plat.x = Math.round(limit * 10) / 10
+      }
+    }
+
     nudgeAwayFromAll(plat, platforms, halfW)
 
     platforms.push(plat)
@@ -221,7 +239,10 @@ export class BillboardTestCourse {
     )
     bbMesh.position.set(this._xOffset + side * this._billboardSpacing, BILLBOARD_HEIGHT / 2, midZ)
     meshes.push(bbMesh)
-    obstacles.push({ mesh: bbMesh, aabb: new THREE.Box3().setFromObject(bbMesh), isBillboard: true, wallNormalX: -side })
+    const bbAABB = new THREE.Box3().setFromObject(bbMesh)
+    bbAABB.min.x -= side < 0 ? 0 : BILLBOARD_HITBOX_PAD
+    bbAABB.max.x += side > 0 ? 0 : BILLBOARD_HITBOX_PAD
+    obstacles.push({ mesh: bbMesh, aabb: bbAABB, isBillboard: true, wallNormalX: -side })
 
     return { index, startZ, meshes, obstacles }
   }
@@ -306,6 +327,9 @@ export class CourseManager {
       )
       mesh.position.set(bb.x, bbY, bb.z)
       const aabb = new THREE.Box3().setFromObject(mesh)
+      // Extend hitbox toward course center
+      if (bb.side > 0) aabb.min.x -= BILLBOARD_HITBOX_PAD
+      else aabb.max.x += BILLBOARD_HITBOX_PAD
       meshes.push(mesh)
       obstacles.push({ mesh, aabb, isBillboard: true, wallNormalX: -bb.side })
     }
