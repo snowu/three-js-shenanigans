@@ -30,7 +30,7 @@ scene.add(humanoid)
 // Controllers
 const movement = new Movement()
 const physics  = new Physics()
-const cameraController = new CameraController(camera, renderer.domElement, humanoid)
+const cameraController = new CameraController(camera, renderer.domElement, humanoid, scene)
 
 // Debug hitboxes — toggle with H
 const HITBOX_W = 0.4
@@ -79,8 +79,9 @@ function animate(timestamp) {
   timer.update(timestamp)
   const delta = timer.getDelta()
 
-  // Generate/cleanup corridor segments based on player position
-  const { added, removed } = course.update(humanoid.position.z, scene, THREE)
+  // Generate corridor segments based on player position and speed
+  const currentSpeed = Math.sqrt(physics.velocity.x ** 2 + physics.velocity.z ** 2)
+  const { added, removed } = course.update(humanoid.position.z, currentSpeed, scene, THREE)
   if (added.length > 0 || removed.length > 0) {
     rebuildObstacleHelpers()
   }

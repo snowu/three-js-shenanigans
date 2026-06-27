@@ -3,7 +3,7 @@ import * as THREE from 'three'
 // ── tunables ──────────────────────────────────────────────────────────────────
 const GRAVITY        = 20    // m/s² downward acceleration
 const JUMP_SPEED     = 8     // m/s initial upward velocity on jump
-const MOVE_SPEED     = 10    // m/s horizontal speed
+export const MOVE_SPEED = 10  // m/s horizontal speed
 const GROUND_Y       = 0     // y of the ground plane (death plane)
 let SPAWN_POS        = { x: 0, y: 1, z: -3 }
 const PLAYER_WIDTH   = 0.4   // AABB width and depth for collision

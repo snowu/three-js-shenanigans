@@ -4,10 +4,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 const MODES = ['third-person', 'first-person', 'free']
 
 export class CameraController {
-  constructor(camera, domElement, humanoid) {
+  constructor(camera, domElement, humanoid, scene) {
     this._camera = camera
     this._domElement = domElement
     this._humanoid = humanoid
+    this._scene = scene
     this._modeIndex = 0
     this._yaw = 0
     this._pitch = 0
@@ -68,9 +69,15 @@ export class CameraController {
         this._humanoid.position.y + 1,
         this._humanoid.position.z
       )
+      this._savedFog = this._scene.fog
+      this._scene.fog = null
     } else {
       this._orbit.enabled = false
       this._requestLock()
+      if (this._savedFog) {
+        this._scene.fog = this._savedFog
+        this._savedFog = null
+      }
     }
   }
 

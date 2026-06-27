@@ -2,6 +2,7 @@ import * as THREE from 'three'
 
 export const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x111111)
+scene.fog = new THREE.Fog(0x111111, 60, 100)
 
 export const camera = new THREE.PerspectiveCamera(
   75,

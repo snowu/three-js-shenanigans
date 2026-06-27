@@ -1,10 +1,7 @@
-// Constraint-solver procedural platform generator with infinite corridor.
-// Generates corridor segments with platforms inside them.
-// New segments spawn as player advances forward.
+import { MOVE_SPEED } from './physics.js'
 
 const GRAVITY    = 20
 const JUMP_SPEED = 8
-const MOVE_SPEED = 10
 
 const SINGLE_JUMP_HEIGHT = (JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY)
 const SINGLE_JUMP_TIME   = (2 * JUMP_SPEED) / GRAVITY
@@ -18,7 +15,9 @@ const CORRIDOR_WIDTH  = 14
 const CORRIDOR_HEIGHT = 12
 const SEGMENT_DEPTH   = 40
 const WALL_THICKNESS  = 0.5
-const GENERATE_AHEAD  = 3
+const GENERATE_TIME_AHEAD = 15  // seconds of travel to keep generated ahead
+const FOG_START        = 60
+const FOG_END          = 100
 const MIN_PLATFORM_SPACING = 1.5
 
 const DIFFICULTY = {
@@ -64,6 +63,7 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
   const platforms = []
 
   const halfW = CORRIDOR_WIDTH / 2 - 1
+  const segmentEndZ = segmentStartZ - SEGMENT_DEPTH
 
   let prev = prevPlatform
   if (!prev) {
@@ -71,49 +71,43 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     platforms.push(prev)
   }
 
-  const segmentEndZ = segmentStartZ - SEGMENT_DEPTH
-
+  // Distribute z positions evenly across this segment, with jitter
+  const slotDepth = SEGMENT_DEPTH / count
   for (let i = 0; i < count; i++) {
     const prevTopY = prev.y + prev.h / 2
 
     const needsDoubleJump = Math.random() < diff.doubleJumpChance
     const maxHeight = needsDoubleJump ? DOUBLE_JUMP_HEIGHT : SINGLE_JUMP_HEIGHT
-    const maxRange  = needsDoubleJump ? MAX_H_RANGE_DOUBLE : MAX_H_RANGE_SINGLE
 
     const maxUp   = maxHeight * diff.heightFraction
     const maxDown = Math.min(MAX_DROP, prevTopY - 0.5)
 
-    // More height variation: bias toward bigger changes
     const heightRoll = Math.random()
     let dy
     if (heightRoll < 0.3) {
-      dy = rand(-maxDown * 0.5, -maxDown * 0.1)  // drop
+      dy = rand(-maxDown * 0.5, -maxDown * 0.1)
     } else if (heightRoll < 0.7) {
-      dy = rand(maxUp * 0.2, maxUp * 0.7)         // moderate climb
+      dy = rand(maxUp * 0.2, maxUp * 0.7)
     } else {
-      dy = rand(maxUp * 0.7, maxUp)                // big climb
+      dy = rand(maxUp * 0.7, maxUp)
     }
-
-    const gap = rand(diff.minGap, diff.maxGap)
-    const hDist = Math.min(gap, maxRange * diff.rangeFraction)
-
-    const minForward = SEGMENT_DEPTH / (count + 1) * 0.5
-    const forwardDist = rand(Math.max(minForward, hDist * 0.5), hDist)
-    const lateralDist = rand(-hDist * 0.6, hDist * 0.6)
 
     const sizeScale = needsDoubleJump ? 0.8 : 1.0
     const w = rand(1.5, 3) * sizeScale
     const h = rand(0.5, 2)
     const d = rand(1.5, 3) * sizeScale
 
+    // Z: evenly spaced slot with random jitter within slot
+    const slotStart = segmentStartZ - i * slotDepth
+    const slotEnd = segmentStartZ - (i + 1) * slotDepth
+    const pz = rand(slotEnd + d / 2 + 0.5, slotStart - d / 2 - 0.5)
+
+    // X: lateral offset from prev, clamped to corridor
+    const lateralRange = Math.min(6, CORRIDOR_WIDTH / 2 - 1)
+    const px = clamp(prev.x + rand(-lateralRange, lateralRange), -halfW + w / 2, halfW - w / 2)
+
     const newTopY = prevTopY + dy
-
-    let px = clamp(prev.x + lateralDist, -halfW + w / 2, halfW - w / 2)
-    let pz = prev.z - forwardDist
-    let py = Math.max(h / 2, newTopY)
-
-    pz = clamp(pz, segmentEndZ + d / 2, segmentStartZ - d / 2)
-    py = clamp(py, h / 2 + 0.5, CORRIDOR_HEIGHT - h / 2 - 1)
+    const py = clamp(Math.max(h / 2, newTopY), h / 2 + 0.5, CORRIDOR_HEIGHT - h / 2 - 1)
 
     const plat = {
       w: Math.round(w * 10) / 10,
@@ -124,23 +118,12 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
       z: Math.round(pz * 10) / 10,
     }
 
-    // Verify reachability
-    const edgeDistX = Math.max(0, Math.abs(plat.x - prev.x) - prev.w / 2 - plat.w / 2)
-    const edgeDistZ = Math.max(0, Math.abs(plat.z - prev.z) - prev.d / 2 - plat.d / 2)
-    const edgeDist = Math.sqrt(edgeDistX * edgeDistX + edgeDistZ * edgeDistZ)
-    const limit = (needsDoubleJump ? MAX_H_RANGE_DOUBLE : MAX_H_RANGE_SINGLE) * diff.rangeFraction
-
-    if (edgeDist > limit) {
-      const scale = (limit * 0.8) / edgeDist
-      plat.x = Math.round(clamp(prev.x + lateralDist * scale, -halfW + w / 2, halfW - w / 2) * 10) / 10
-      plat.z = Math.round((prev.z - forwardDist * scale) * 10) / 10
-    }
-
-    // Height reachability
+    // Height reachability check
     const platTopY = plat.y + plat.h / 2
     const heightDiff = platTopY - prevTopY
-    if (heightDiff > maxHeight * diff.heightFraction) {
-      plat.y = Math.round(clamp(prevTopY + maxHeight * diff.heightFraction * 0.8, h / 2 + 0.5, CORRIDOR_HEIGHT - 2) * 10) / 10
+    const maxReachHeight = (needsDoubleJump ? DOUBLE_JUMP_HEIGHT : SINGLE_JUMP_HEIGHT) * diff.heightFraction
+    if (heightDiff > maxReachHeight) {
+      plat.y = Math.round(clamp(prevTopY + maxReachHeight * 0.8, h / 2 + 0.5, CORRIDOR_HEIGHT - 2) * 10) / 10
     }
 
     // Nudge away from overlapping platforms
@@ -178,24 +161,29 @@ export class CourseManager {
     return out
   }
 
-  update(playerZ, scene, THREE) {
-    // Track furthest forward position
+  update(playerZ, currentSpeed, scene, THREE) {
     if (playerZ < this._furthestZ) this._furthestZ = playerZ
 
-    const playerSegment = Math.floor(-this._furthestZ / SEGMENT_DEPTH)
+    // Generate distance scales with player speed
+    const speed = Math.max(currentSpeed, MOVE_SPEED)
+    const generateDist = speed * GENERATE_TIME_AHEAD
+    const targetZ = this._furthestZ - generateDist
+
+    const targetSegment = Math.floor(-targetZ / SEGMENT_DEPTH)
     const added = []
 
-    // Generate segments ahead of furthest reached position
-    while (this._nextSegmentIndex <= playerSegment + GENERATE_AHEAD) {
+    while (this._nextSegmentIndex <= targetSegment) {
       const seg = this._createSegment(THREE)
       this._segments.push(seg)
       for (const m of seg.meshes) { scene.add(m); added.push(m) }
       for (const m of seg.walls) { scene.add(m); added.push(m) }
     }
 
-    // No cleanup — segments persist when going backward
     return { added, removed: [] }
   }
+
+  static get FOG_START() { return FOG_START }
+  static get FOG_END() { return FOG_END }
 
   _createSegment(THREE) {
     const index = this._nextSegmentIndex++
