@@ -20,7 +20,7 @@ export class Physics {
     this._airJumpsLeft = MAX_AIR_JUMPS
   }
 
-  update(humanoid, moveDir, wDown, jumpPressed, delta, obstacles, wallAABBs = []) {
+  update(humanoid, moveDir, wDown, sDown, jumpPressed, delta, obstacles, wallAABBs = []) {
     // Snapshot hanging state before any transitions this frame.
     // Prevents grab and pull-up firing in the same frame when W is held.
     const wasHanging = this._state === STATE.HANGING
@@ -97,14 +97,19 @@ export class Physics {
       this._airJumpsLeft = MAX_AIR_JUMPS
     }
 
-    // 7. Ledge grab — only when airborne with W held
-    if (this._state === STATE.AIRBORNE && wDown) {
+    // 7. Ledge grab — auto-grab when falling past a ledge
+    if (this._state === STATE.AIRBORNE && this.velocity.y <= 0) {
       this._checkLedgeGrab(humanoid, obstacles)
     }
 
-    // 8. Pull up — only if already hanging at start of frame
-    if (wasHanging && (jumpPressed || wDown)) {
-      this._pullUp(humanoid)
+    // 8. Hanging actions — pull up (W/jump) or drop (S)
+    if (wasHanging) {
+      if (jumpPressed || wDown) {
+        this._pullUp(humanoid)
+      } else if (sDown) {
+        this._state = STATE.AIRBORNE
+        this.velocity.set(0, 0, 0)
+      }
     }
   }
 
@@ -159,10 +164,16 @@ export class Physics {
 
     for (const { aabb } of obstacles) {
       const topY = aabb.max.y
+
+      // Hands must be within grab range of the box top
       if (handsY < topY - LEDGE_REACH || handsY > topY) continue
+
+      // Must be near the box horizontally
       if (px < aabb.min.x - LEDGE_H_MARGIN || px > aabb.max.x + LEDGE_H_MARGIN) continue
       if (pz < aabb.min.z - LEDGE_H_MARGIN || pz > aabb.max.z + LEDGE_H_MARGIN) continue
 
+      // Snap hands to ledge height
+      humanoid.position.y = topY - HAND_OFFSET_Y
       this._state    = STATE.HANGING
       this._hangTopY = topY
       this.velocity.set(0, 0, 0)

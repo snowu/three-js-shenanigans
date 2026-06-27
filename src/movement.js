@@ -22,6 +22,7 @@ export class Movement {
   }
 
   get wDown() { return this._keys.w }
+  get sDown() { return this._keys.s }
 
   // True only until clearJump() is called — gives Physics a one-frame signal
   get jumpPressed() { return this._jumpQueued }

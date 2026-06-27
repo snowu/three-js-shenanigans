@@ -88,7 +88,7 @@ function animate(timestamp) {
   const jumpPressed = movement.jumpPressed
   movement.clearJump()
 
-  physics.update(humanoid, moveDir, movement.wDown, jumpPressed, delta,
+  physics.update(humanoid, moveDir, movement.wDown, movement.sDown, jumpPressed, delta,
     course.allObstacles, course.allWallAABBs)
   cameraController.update()
 
