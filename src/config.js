@@ -66,14 +66,14 @@ const config = {
   // ── platform generation ────────────────────────────────────────────────────
   MAX_DROP:               8,
   MIN_PLATFORM_SPACING:   3.5,
-  FIRST_PLATFORM_GAP:     6,
+  FIRST_PLATFORM_GAP:     3,
   PLAT_HEIGHT_FRAC:       0.7,
   PLAT_RANGE_FRAC:        0.7,
-  PLAT_MIN_GAP:           3,
-  PLAT_MAX_GAP:           6,
+  PLAT_MIN_GAP:           5,
+  PLAT_MAX_GAP:           8,
   PLAT_DOUBLE_JUMP_CHANCE: 0.2,
-  PLAT_MIN_PER_SEGMENT:   15,
-  PLAT_MAX_PER_SEGMENT:   24,
+  PLAT_MIN_PER_SEGMENT:   16,
+  PLAT_MAX_PER_SEGMENT:   20,
   BOX_WIDTH:              3,
   BOX_HEIGHT:             1.1,
   BOX_DEPTH:              5.5,
@@ -162,7 +162,7 @@ const config = {
 
   // ── spawn platform ────────────────────────────────────────────────────────
   SPAWN_PLAT_SIZE:        3,
-  WARMUP_COUNT:           4,
+  WARMUP_COUNT:           2,
   DOUBLE_JUMP_SIZE_SCALE: 0.8,
 
   // ── animation ─────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { createGround, updateGround } from './ground.js'
 import { createRocks, updateRocks, getRockHazards, createMountains, updateMountains } from './environment.js'
 import { CourseManager, BillboardTestCourse } from './obstacles.js'
 import { updatePlatformMaterials } from './platformStyles.js'
+import { updateBillboardMaterials } from './billboardStyles.js'
 import { Physics } from './physics.js'
 import { HumanoidAnimator } from './humanoidAnimator.js'
 import { createDebugMenu } from './debugMenu.js'
@@ -282,6 +283,7 @@ function animate(timestamp) {
   updateRocks(delta, timestamp * 0.001, humanoid.position.x, humanoid.position.z, allObstacles)
   updateMountains(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   updatePlatformMaterials(timestamp * 0.001)
+  updateBillboardMaterials(timestamp * 0.001)
 
   // Rock hazard collision
   const halfW = config.PLAYER_WIDTH / 2

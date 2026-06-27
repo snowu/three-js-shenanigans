@@ -1,8 +1,7 @@
 import config from './config.js'
 import { createPlatformMeshes } from './platformStyles.js'
+import { createBillboardMeshes } from './billboardStyles.js'
 import * as THREE from 'three'
-
-const billboardMat = new THREE.MeshStandardMaterial({ color: 0x555566, roughness: 0.7 })
 
 function rand(min, max) {
   return min + Math.random() * (max - min)
@@ -64,7 +63,7 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
   for (let i = 0; i < count; i++) {
     // Insert billboard gap before this platform?
-    if (platIndex > 0 && platIndex % config.BILLBOARD_GAP_EVERY === 0 && !isFirstSegment) {
+    if (platIndex > 0 && platIndex % config.BILLBOARD_GAP_EVERY === 0 && i >= WARMUP_COUNT) {
       const gapMidZ = nextZ - config.BILLBOARD_GAP_SIZE / 2
       const tooClose = lastBillboardZ !== null &&
         Math.abs(gapMidZ - lastBillboardZ) < config.BILLBOARD_DEPTH + config.MIN_PLATFORM_SPACING
@@ -352,19 +351,12 @@ export class CourseManager {
 
     // Billboards placed in gaps between platforms
     for (const bb of billboards) {
-      const bbH = config.BILLBOARD_HEIGHT
-      const bbY = bb.y + bbH / 2
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(config.BILLBOARD_WIDTH, bbH, config.BILLBOARD_DEPTH),
-        billboardMat
-      )
-      mesh.position.set(bb.x, bbY, bb.z)
-      const aabb = new THREE.Box3().setFromObject(mesh)
-      // Extend hitbox toward course center
+      const result = createBillboardMeshes(bb, config)
+      for (const m of result.meshes) meshes.push(m)
+      const aabb = new THREE.Box3().setFromObject(result.mainMesh)
       if (bb.side > 0) aabb.min.x -= config.BILLBOARD_HITBOX_PAD
       else aabb.max.x += config.BILLBOARD_HITBOX_PAD
-      meshes.push(mesh)
-      obstacles.push({ mesh, aabb, isBillboard: true, wallNormalX: -bb.side })
+      obstacles.push({ mesh: result.mainMesh, aabb, isBillboard: true, wallNormalX: -bb.side })
     }
 
     return { index, startZ, platforms, meshes, obstacles }
