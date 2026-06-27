@@ -444,6 +444,12 @@ export class Physics {
       if (px < grabBox.min.x - config.LEDGE_H_MARGIN || px > grabBox.max.x + config.LEDGE_H_MARGIN) continue
       if (pz < grabBox.min.z - config.LEDGE_H_MARGIN || pz > grabBox.max.z + config.LEDGE_H_MARGIN) continue
 
+      // Only grab from extended zone — skip if player is fully inside the regular AABB
+      const a = obs.aabb
+      const insideX = px > a.min.x + config.LEDGE_H_MARGIN && px < a.max.x - config.LEDGE_H_MARGIN
+      const insideZ = pz > a.min.z + config.LEDGE_H_MARGIN && pz < a.max.z - config.LEDGE_H_MARGIN
+      if (insideX && insideZ) continue
+
       humanoid.position.y = topY - config.HAND_OFFSET_Y
       this._state    = STATE.HANGING
       this._hangTopY = topY
