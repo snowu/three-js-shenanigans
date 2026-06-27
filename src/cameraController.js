@@ -140,6 +140,8 @@ export class CameraController {
     const targetYaw = Math.atan2(-dx, -dz)
     const targetPitch = -Math.atan2(dy - 1.75, hDist)
 
+    const clampedPitch = Math.max(0, Math.min(Math.PI / 3, targetPitch))
+
     const lerpSpeed = 1.5
     const dt = 0.016
     const t = 1 - Math.exp(-lerpSpeed * dt)
@@ -147,8 +149,8 @@ export class CameraController {
     while (yawDiff > Math.PI) yawDiff -= Math.PI * 2
     while (yawDiff < -Math.PI) yawDiff += Math.PI * 2
     this._yaw += yawDiff * t
-    this._pitch += (targetPitch - this._pitch) * t
-    this._pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, this._pitch))
+    this._pitch += (clampedPitch - this._pitch) * t
+    this._pitch = Math.max(0, Math.min(Math.PI / 3, this._pitch))
   }
 
   set animator(a) { this._animator = a }
