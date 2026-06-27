@@ -332,8 +332,7 @@ export class Physics {
       this._pullUpStartZ = humanoid.position.z
       this._pullUpTargetY = this._hangTopY
       const aabb = this._hangAABB
-      const centerZ = (aabb.min.z + aabb.max.z) / 2
-      this._pullUpTargetZ = centerZ
+      this._pullUpTargetZ = aabb.max.z - config.PLAYER_WIDTH
     }
   }
 
