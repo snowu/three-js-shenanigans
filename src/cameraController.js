@@ -3,6 +3,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 const MODES = ['third-person', 'first-person', 'free']
 
+const FREE_CAM_HEIGHT = 80
+const FREE_CAM_DISTANCE = 10   // slight offset so it's not perfectly top-down
+
 export class CameraController {
   constructor(camera, domElement, humanoid, scene) {
     this._camera = camera
@@ -64,11 +67,17 @@ export class CameraController {
     if (this.mode === 'free') {
       document.exitPointerLock()
       this._orbit.enabled = true
+      this._camera.position.set(
+        this._humanoid.position.x + FREE_CAM_DISTANCE,
+        this._humanoid.position.y + FREE_CAM_HEIGHT,
+        this._humanoid.position.z + FREE_CAM_DISTANCE
+      )
       this._orbit.target.set(
         this._humanoid.position.x,
-        this._humanoid.position.y + 1,
+        this._humanoid.position.y,
         this._humanoid.position.z
       )
+      this._orbit.update()
       this._savedFog = this._scene.fog
       this._scene.fog = null
     } else {

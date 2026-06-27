@@ -15,7 +15,7 @@ const CORRIDOR_WIDTH  = 14
 const CORRIDOR_HEIGHT = 12
 const SEGMENT_DEPTH   = 40
 const WALL_THICKNESS  = 0.5
-const GENERATE_TIME_AHEAD = 15  // seconds of travel to keep generated ahead
+const GENERATE_TIME_AHEAD = 2   // seconds of travel buffer beyond fog
 const FOG_START        = 60
 const FOG_END          = 100
 const MIN_PLATFORM_SPACING = 1.5
@@ -164,9 +164,9 @@ export class CourseManager {
   update(playerZ, currentSpeed, scene, THREE) {
     if (playerZ < this._furthestZ) this._furthestZ = playerZ
 
-    // Generate distance scales with player speed
+    // Always past fog + speed-scaled buffer so fast players don't outrun generation
     const speed = Math.max(currentSpeed, MOVE_SPEED)
-    const generateDist = speed * GENERATE_TIME_AHEAD
+    const generateDist = FOG_END + SEGMENT_DEPTH + speed * GENERATE_TIME_AHEAD
     const targetZ = this._furthestZ - generateDist
 
     const targetSegment = Math.floor(-targetZ / SEGMENT_DEPTH)

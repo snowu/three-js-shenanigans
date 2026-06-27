@@ -3,7 +3,7 @@ import * as THREE from 'three'
 // ── tunables ──────────────────────────────────────────────────────────────────
 const GRAVITY        = 20    // m/s² downward acceleration
 const JUMP_SPEED     = 8     // m/s initial upward velocity on jump
-export const MOVE_SPEED = 10  // m/s horizontal speed
+export const MOVE_SPEED = 15  // m/s horizontal speed
 const GROUND_Y       = 0     // y of the ground plane (death plane)
 let SPAWN_POS        = { x: 0, y: 1, z: -3 }
 const PLAYER_WIDTH   = 0.4   // AABB width and depth for collision
@@ -68,29 +68,34 @@ export class Physics {
       this.velocity.z = moveDir.z * MOVE_SPEED
     }
 
-    // 4. Integrate position
-    humanoid.position.addScaledVector(this.velocity, delta)
+    // 4. Sub-stepped integration + collision to prevent tunneling at high speeds
+    const speed = this.velocity.length()
+    const maxStep = PLAYER_WIDTH * 0.4
+    const subSteps = speed * delta > maxStep ? Math.ceil(speed * delta / maxStep) : 1
+    const subDelta = delta / subSteps
 
-    // 5. Ground plane — solid floor for testing
-    if (humanoid.position.y <= GROUND_Y) {
-      humanoid.position.y = GROUND_Y
-      this.velocity.y = 0
-      this._state = STATE.GROUNDED
-      supportedThisFrame = true
-    }
+    for (let s = 0; s < subSteps; s++) {
+      humanoid.position.addScaledVector(this.velocity, subDelta)
 
-    // 6. AABB collision vs each obstacle.
-    // Skipped when hanging: the player's body overlaps the box edge intentionally
-    // and AABB resolution would push them off the ledge.
-    if (this._state !== STATE.HANGING) {
-      for (const { aabb } of obstacles) {
-        if (this._resolveAABB(humanoid, aabb)) supportedThisFrame = true
+      // Ground plane
+      if (humanoid.position.y <= GROUND_Y) {
+        humanoid.position.y = GROUND_Y
+        this.velocity.y = 0
+        this._state = STATE.GROUNDED
+        supportedThisFrame = true
       }
-    }
 
-    // Wall collision — horizontal push only, walls never support
-    for (const aabb of wallAABBs) {
-      this._resolveAABB(humanoid, aabb)
+      // AABB collision vs obstacles
+      if (this._state !== STATE.HANGING) {
+        for (const { aabb } of obstacles) {
+          if (this._resolveAABB(humanoid, aabb)) supportedThisFrame = true
+        }
+      }
+
+      // Wall collision
+      for (const aabb of wallAABBs) {
+        this._resolveAABB(humanoid, aabb)
+      }
     }
 
     // If GROUNDED but nothing supported the player this frame, they walked off an edge.
