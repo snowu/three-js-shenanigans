@@ -36,7 +36,7 @@ const config = {
   // ── corridor ──────────────────────────────────────────────────────────────
   CORRIDOR_WIDTH:  14,
   CORRIDOR_HEIGHT: 12,
-  SEGMENT_DEPTH:   40,
+  SEGMENT_DEPTH:   120,
   WALL_THICKNESS:  0.5,
 
   // ── fog / generation ──────────────────────────────────────────────────────
@@ -65,21 +65,18 @@ const config = {
 
   // ── platform generation ────────────────────────────────────────────────────
   MAX_DROP:               8,
-  MIN_PLATFORM_SPACING:   1.5,
+  MIN_PLATFORM_SPACING:   3.5,
   FIRST_PLATFORM_GAP:     6,
   PLAT_HEIGHT_FRAC:       0.7,
   PLAT_RANGE_FRAC:        0.7,
   PLAT_MIN_GAP:           3,
   PLAT_MAX_GAP:           6,
   PLAT_DOUBLE_JUMP_CHANCE: 0.2,
-  PLAT_MIN_PER_SEGMENT:   5,
-  PLAT_MAX_PER_SEGMENT:   8,
-  BOX_MIN_WIDTH:          2,
-  BOX_MAX_WIDTH:          4,
-  BOX_MIN_HEIGHT:         0.3,
-  BOX_MAX_HEIGHT:         0.8,
-  BOX_MIN_DEPTH:          4,
-  BOX_MAX_DEPTH:          6,
+  PLAT_MIN_PER_SEGMENT:   15,
+  PLAT_MAX_PER_SEGMENT:   24,
+  BOX_WIDTH:              3,
+  BOX_HEIGHT:             1.1,
+  BOX_DEPTH:              5.5,
 
   // ── camera ─────────────────────────────────────────────────────────────────
   CAMERA_FOV:             90,

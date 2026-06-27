@@ -1,4 +1,8 @@
 import config from './config.js'
+import { createPlatformMeshes } from './platformStyles.js'
+import * as THREE from 'three'
+
+const billboardMat = new THREE.MeshStandardMaterial({ color: 0x555566, roughness: 0.7 })
 
 function rand(min, max) {
   return min + Math.random() * (max - min)
@@ -100,9 +104,9 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
     const sizeScale = needsDoubleJump ? config.DOUBLE_JUMP_SIZE_SCALE : 1.0
     const warmupSizeBonus = warmupT < 1 ? 1 + (1 - warmupT) * 0.5 : 1.0
-    const w = rand(config.BOX_MIN_WIDTH, config.BOX_MAX_WIDTH) * sizeScale * warmupSizeBonus
-    const h = rand(config.BOX_MIN_HEIGHT, config.BOX_MAX_HEIGHT)
-    const d = rand(config.BOX_MIN_DEPTH, config.BOX_MAX_DEPTH) * sizeScale * warmupSizeBonus
+    const w = config.BOX_WIDTH * sizeScale * warmupSizeBonus
+    const h = config.BOX_HEIGHT
+    const d = config.BOX_DEPTH * sizeScale * warmupSizeBonus
 
     const gap = rand(diff.minGap, diff.maxGap)
     const pz = nextZ - gap
@@ -285,8 +289,6 @@ export class CourseManager {
     for (const seg of this._segments) {
       for (const m of seg.meshes) {
         scene.remove(m)
-        m.geometry.dispose()
-        if (m.material.dispose) m.material.dispose()
       }
     }
     this._segments = []
@@ -332,26 +334,23 @@ export class CourseManager {
     this._lastBillboardZ = lastBillboardZ
     this._prevSegmentPlatforms = platforms.slice(-3)
 
-    const PALETTE = [0x4fc3f7, 0x81c784, 0xff8a65, 0xffd54f, 0xce93d8]
     const meshes = []
     const obstacles = []
 
     platforms.forEach((b, i) => {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(b.w, b.h, b.d),
-        new THREE.MeshStandardMaterial({ color: PALETTE[i % PALETTE.length] })
-      )
-      mesh.position.set(b.x, b.y, b.z)
-      const aabb = new THREE.Box3().setFromObject(mesh)
+      const globalIndex = this._platformCounter - platforms.length + i
+      const result = createPlatformMeshes(b, globalIndex)
+
+      for (const m of result.meshes) meshes.push(m)
+
+      const aabb = new THREE.Box3().setFromObject(result.mainMesh)
       const ext = config.LEDGE_GRAB_EXTEND
       const ledgeAABB = aabb.clone()
       ledgeAABB.max.z += ext
-      meshes.push(mesh)
-      obstacles.push({ mesh, aabb, ledgeAABB, isSpawn: !!b.isSpawn })
+      obstacles.push({ mesh: result.mainMesh, aabb, ledgeAABB, isSpawn: !!b.isSpawn })
     })
 
     // Billboards placed in gaps between platforms
-    const billboardMat = new THREE.MeshStandardMaterial({ color: 0x555566, roughness: 0.7 })
     for (const bb of billboards) {
       const bbH = config.BILLBOARD_HEIGHT
       const bbY = bb.y + bbH / 2
@@ -371,4 +370,7 @@ export class CourseManager {
     return { index, startZ, platforms, meshes, obstacles }
   }
 
+  updatePlatforms() {
+    // no-op — material updates are now global via updatePlatformMaterials()
+  }
 }
