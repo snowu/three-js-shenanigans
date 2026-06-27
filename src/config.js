@@ -2,10 +2,10 @@
 // Import from here — never redeclare these values in other files.
 
 // ── player physics ───────────────────────────────────────────────────────────
-export const GRAVITY       = 20    // m/s² downward acceleration
-export const JUMP_SPEED    = 8     // m/s initial upward velocity on jump
-export const MOVE_SPEED    = 15    // m/s horizontal speed
-export const COYOTE_TIME   = 0.12  // seconds after walking off edge where jump still works
+export const GRAVITY       = 50    // m/s² downward acceleration
+export const JUMP_SPEED    = 18     // m/s initial upward velocity on jump
+export const MOVE_SPEED    = 10    // m/s horizontal speed
+export const COYOTE_TIME   = 0.50  // seconds after walking off edge where jump still works
 export const MAX_AIR_JUMPS = 1     // extra jumps allowed while airborne (double jump)
 
 // ── player dimensions ────────────────────────────────────────────────────────
