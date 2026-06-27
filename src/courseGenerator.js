@@ -12,16 +12,16 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v))
 }
 
-function nudgeAwayFromAll(plat, allPlatforms, halfW) {
+function nudgeAwayFromAll(plat, allPlatforms, neighborPlatforms, halfW) {
+  const checkList = neighborPlatforms ? allPlatforms.concat(neighborPlatforms) : allPlatforms
   for (let pass = 0; pass < 3; pass++) {
-    for (const other of allPlatforms) {
+    for (const other of checkList) {
       const gapX = Math.max(0, Math.abs(plat.x - other.x) - plat.w / 2 - other.w / 2)
       const gapZ = Math.max(0, Math.abs(plat.z - other.z) - plat.d / 2 - other.d / 2)
       const gapY = Math.max(0, Math.abs(plat.y - other.y) - plat.h / 2 - other.h / 2)
       const dist = Math.sqrt(gapX * gapX + gapZ * gapZ + gapY * gapY)
       if (dist < config.MIN_PLATFORM_SPACING) {
         const push = config.MIN_PLATFORM_SPACING - dist + 0.5
-        // Push forward (-z) and laterally away
         plat.z = Math.round((plat.z - push * 0.7) * 10) / 10
         const lateralDir = plat.x >= other.x ? 1 : -1
         plat.x = Math.round(clamp(plat.x + lateralDir * push * 0.5, -halfW, halfW) * 10) / 10
@@ -31,7 +31,7 @@ function nudgeAwayFromAll(plat, allPlatforms, halfW) {
   }
 }
 
-function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'medium', isFirstSegment = false, platformCounter = 0) {
+function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'medium', isFirstSegment = false, platformCounter = 0, neighborPlatforms = null, lastBillboardZ = null) {
   const diff = {
     heightFraction: config.PLAT_HEIGHT_FRAC,
     rangeFraction: config.PLAT_RANGE_FRAC,
@@ -62,17 +62,22 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
   for (let i = 0; i < count; i++) {
     // Insert billboard gap before this platform?
     if (platIndex > 0 && platIndex % config.BILLBOARD_GAP_EVERY === 0 && !isFirstSegment) {
-      const prevTopY = prev.y + prev.h / 2
-      const side = prev.x >= 0 ? 1 : -1
       const gapMidZ = nextZ - config.BILLBOARD_GAP_SIZE / 2
-      billboards.push({
-        x: side * config.BILLBOARD_X_OFFSET,
-        y: prevTopY - config.BILLBOARD_Y_OFFSET,
-        z: gapMidZ,
-        side,
-      })
-      nextZ -= config.BILLBOARD_GAP_SIZE
-      afterGapSide = side
+      const tooClose = lastBillboardZ !== null &&
+        Math.abs(gapMidZ - lastBillboardZ) < config.BILLBOARD_DEPTH + config.MIN_PLATFORM_SPACING
+      if (!tooClose) {
+        const prevTopY = prev.y + prev.h / 2
+        const side = prev.x >= 0 ? 1 : -1
+        billboards.push({
+          x: side * config.BILLBOARD_X_OFFSET,
+          y: prevTopY - config.BILLBOARD_Y_OFFSET,
+          z: gapMidZ,
+          side,
+        })
+        lastBillboardZ = gapMidZ
+        nextZ -= config.BILLBOARD_GAP_SIZE
+        afterGapSide = side
+      }
     }
 
     const prevTopY = prev.y + prev.h / 2
@@ -152,14 +157,14 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
       }
     }
 
-    nudgeAwayFromAll(plat, platforms, halfW)
+    nudgeAwayFromAll(plat, platforms, neighborPlatforms, halfW)
 
     platforms.push(plat)
     prev = plat
     platIndex++
   }
 
-  return { platforms, billboards, lastPlatform: prev, platformCounter: platIndex }
+  return { platforms, billboards, lastPlatform: prev, platformCounter: platIndex, lastBillboardZ: lastBillboardZ }
 }
 
 export class BillboardTestCourse {
@@ -260,6 +265,8 @@ export class CourseManager {
     this._lastPlatform = null
     this._furthestZ = 0
     this._platformCounter = 0
+    this._lastBillboardZ = null
+    this._prevSegmentPlatforms = null
   }
 
   get allObstacles() {
@@ -287,6 +294,8 @@ export class CourseManager {
     this._lastPlatform = null
     this._furthestZ = 0
     this._platformCounter = 0
+    this._lastBillboardZ = null
+    this._prevSegmentPlatforms = null
   }
 
   update(playerZ, currentSpeed, scene, THREE) {
@@ -314,11 +323,14 @@ export class CourseManager {
     const index = this._nextSegmentIndex++
     const startZ = -index * config.SEGMENT_DEPTH
 
-    const { platforms, billboards, lastPlatform, platformCounter } = generateSegmentPlatforms(
-      this._lastPlatform, startZ, this._difficulty, index === 0, this._platformCounter
+    const { platforms, billboards, lastPlatform, platformCounter, lastBillboardZ } = generateSegmentPlatforms(
+      this._lastPlatform, startZ, this._difficulty, index === 0, this._platformCounter,
+      this._prevSegmentPlatforms, this._lastBillboardZ
     )
     this._lastPlatform = lastPlatform
     this._platformCounter = platformCounter
+    this._lastBillboardZ = lastBillboardZ
+    this._prevSegmentPlatforms = platforms.slice(-3)
 
     const PALETTE = [0x4fc3f7, 0x81c784, 0xff8a65, 0xffd54f, 0xce93d8]
     const meshes = []

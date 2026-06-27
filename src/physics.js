@@ -50,7 +50,7 @@ export class Physics {
 
   update(humanoid, moveDir, wDown, sDown, eDown, jumpPressed, delta, obstacles, wallAABBs = []) {
     this._landedOnGround = false
-    this._legsExtended = eDown && (this._state === STATE.AIRBORNE || this._state === STATE.WALLRUNNING)
+    this._legsExtended = eDown && this._state === STATE.AIRBORNE
 
     const wasHanging = this._state === STATE.HANGING
 
@@ -194,7 +194,7 @@ export class Physics {
       }
 
       // Kick hitbox — extended legs with full collision resolution
-      if (this._legsExtended) {
+      if (this._legsExtended && this._state !== STATE.GROUNDED) {
         const yaw = humanoid.rotation.y
         const fwdX = -Math.sin(yaw)
         const fwdZ = -Math.cos(yaw)
@@ -236,10 +236,13 @@ export class Physics {
             const kickCenter = kickY
             const boxCenter = (a.min.y + a.max.y) / 2
             if (kickCenter > boxCenter) {
-              // Legs on top — push up, count as supported
               humanoid.position.y += (a.max.y - kMinY)
               this.velocity.y = Math.max(this.velocity.y, 0)
               supportedThisFrame = true
+              this._legsExtended = false
+              this._state = STATE.GROUNDED
+              this._speedBoost = 0
+              if (this.onLand) this.onLand()
               if (!this._landedOnGround && this.onBoxLand) this.onBoxLand(obs)
             } else {
               // Legs under — push down
@@ -278,6 +281,10 @@ export class Physics {
     // Reset air jumps when grounded or wall running
     if (this._state === STATE.GROUNDED || this._state === STATE.WALLRUNNING) {
       this._airJumpsLeft = config.MAX_AIR_JUMPS
+    }
+
+    if (this._state === STATE.GROUNDED || this._state === STATE.HANGING) {
+      this._legsExtended = false
     }
 
     // 7. Ledge grab — auto-grab when falling past a ledge
