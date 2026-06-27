@@ -4,6 +4,7 @@ import { createHumanoid } from './humanoid.js'
 import { Movement } from './movement.js'
 import { CameraController } from './cameraController.js'
 import { createGround, updateGround } from './ground.js'
+import { createRocks, updateRocks, getRockHazards, createMountains, updateMountains } from './environment.js'
 import { CourseManager, BillboardTestCourse } from './obstacles.js'
 import { Physics } from './physics.js'
 import { HumanoidAnimator } from './humanoidAnimator.js'
@@ -24,6 +25,10 @@ scene.add(dirLight)
 // Death floor
 const ground = createGround()
 scene.add(ground)
+
+// Environment: rocks + mountains
+createRocks(scene)
+createMountains(scene)
 
 // Course manager — generates corridor + platforms on the fly
 const course = new CourseManager('medium')
@@ -273,6 +278,23 @@ function animate(timestamp) {
   stateEl.textContent = physics.state
   updateGround(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   updateSky(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
+  updateRocks(delta, timestamp * 0.001, humanoid.position.x, humanoid.position.z, allObstacles)
+  updateMountains(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
+
+  // Rock hazard collision
+  const halfW = config.PLAYER_WIDTH / 2
+  for (const rock of getRockHazards()) {
+    const rp = rock.mesh.position
+    const pp = humanoid.position
+    const dx = Math.abs(rp.x - pp.x)
+    const dz = Math.abs(rp.z - pp.z)
+    const dy = rp.y - pp.y
+    const rSize = rock.mesh.scale.x
+    if (dx < halfW + rSize && dz < halfW + rSize && dy >= 0 && dy < config.PLAYER_HEIGHT) {
+      physics.onGroundHit()
+      break
+    }
+  }
   renderer.render(scene, camera)
 }
 animate()

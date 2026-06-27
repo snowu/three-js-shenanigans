@@ -69,26 +69,49 @@ const skyMat = new THREE.ShaderMaterial({
       float height = dir.y;
 
       // Vertical gradient: lava glow below, dark smoke above
-      vec3 infernoLow  = vec3(0.25, 0.05, 0.0);
-      vec3 infernoMid  = vec3(0.1, 0.02, 0.01);
+      vec3 infernoLow  = vec3(0.3, 0.06, 0.0);
+      vec3 infernoMid  = vec3(0.12, 0.025, 0.01);
       vec3 infernoHigh = vec3(0.02, 0.01, 0.02);
 
       float t = clamp(height * 0.5 + 0.5, 0.0, 1.0);
       vec3 sky = mix(infernoLow, infernoMid, smoothstep(0.0, 0.4, t));
       sky = mix(sky, infernoHigh, smoothstep(0.4, 0.8, t));
 
-      // Animated smoke/ember clouds
+      // Multi-layer smoke with more movement
       vec2 uv = vec2(atan(dir.z, dir.x) * 0.5, height * 2.0);
       float smoke = snoise(uv * 3.0 + time * 0.01) * 0.5 + 0.5;
       smoke += snoise(uv * 6.0 - time * 0.015) * 0.25;
+      float smoke2 = snoise(uv * 1.5 + vec2(time * 0.008, time * 0.005)) * 0.5 + 0.5;
+      smoke2 = smoothstep(0.2, 0.7, smoke2);
       smoke = smoothstep(0.3, 0.8, smoke);
 
       vec3 smokeColor = vec3(0.15, 0.03, 0.0);
+      vec3 thickSmoke = vec3(0.06, 0.02, 0.01);
       sky += smokeColor * smoke * (1.0 - t);
+      sky += thickSmoke * smoke2 * (1.0 - t) * 0.6;
 
-      // Horizon glow
-      float horizonGlow = exp(-abs(height) * 8.0);
-      sky += vec3(0.4, 0.08, 0.0) * horizonGlow * 0.5;
+      // Horizon glow - brighter
+      float horizonGlow = exp(-abs(height) * 6.0);
+      sky += vec3(0.5, 0.1, 0.0) * horizonGlow * 0.6;
+
+      // Distant eruption pulses
+      float eruptAngle = atan(dir.z, dir.x);
+      float erupt1 = snoise(vec2(eruptAngle * 2.0, time * 0.15)) * 0.5 + 0.5;
+      erupt1 = pow(erupt1, 6.0);
+      float erupt2 = snoise(vec2(eruptAngle * 3.0 + 5.0, time * 0.12)) * 0.5 + 0.5;
+      erupt2 = pow(erupt2, 8.0);
+      float eruptMask = exp(-abs(height) * 5.0);
+      sky += vec3(0.8, 0.2, 0.0) * erupt1 * eruptMask * 0.4;
+      sky += vec3(1.0, 0.5, 0.1) * erupt2 * eruptMask * 0.3;
+
+      // Floating embers — smooth noise-based, no grid pops
+      float heightFade = smoothstep(0.0, 0.4, t) * smoothstep(0.9, 0.5, t);
+      float ember1 = snoise(vec2(eruptAngle * 5.0, height * 8.0 + time * 0.03));
+      float ember2 = snoise(vec2(eruptAngle * 8.0 + 3.0, height * 6.0 - time * 0.02));
+      float ember3 = snoise(vec2(eruptAngle * 12.0 + 7.0, height * 10.0 + time * 0.04));
+      float embers = pow(max(ember1, 0.0), 4.0) + pow(max(ember2, 0.0), 5.0) * 0.6 + pow(max(ember3, 0.0), 6.0) * 0.3;
+      vec3 emberColor = mix(vec3(1.0, 0.3, 0.0), vec3(1.0, 0.7, 0.2), ember1 * 0.5 + 0.5);
+      sky += emberColor * embers * heightFade * 0.3;
 
       gl_FragColor = vec4(sky, 1.0);
     }

@@ -137,6 +137,28 @@ const config = {
   LAVA_GLOW_BASE:         1.4,
   LAVA_GLOW_PULSE:        0.4,
 
+  // ── lava rocks ─────────────────────────────────────────────────────────────
+  ROCK_POOL_SIZE:         20,
+  ROCK_MIN_SIZE:          0.4,
+  ROCK_MAX_SIZE:          1.2,
+  ROCK_ERUPT_SPEED_MIN:   10,
+  ROCK_ERUPT_SPEED_MAX:   20,
+  ROCK_ERUPT_RADIUS:      30,
+  ROCK_ERUPT_INTERVAL:    0.2,
+  ROCK_HAZARD_CHANCE:     0.08,
+  ROCK_HAZARD_LIFETIME:   6,
+  ROCK_SPIN_SPEED:        4,
+  ROCK_LATERAL_SPEED:     4,
+  ROCK_TRAIL_COUNT:       6,
+
+  // ── distant mountains ─────────────────────────────────────────────────────
+  MOUNTAIN_LAYER_COUNT:    3,
+  MOUNTAIN_RADIUS_INNER:   80,
+  MOUNTAIN_RADIUS_STEP:    30,
+  MOUNTAIN_HEIGHT_MIN:     20,
+  MOUNTAIN_HEIGHT_MAX:     55,
+  MOUNTAIN_SEGMENTS:       128,
+
   // ── spawn platform ────────────────────────────────────────────────────────
   SPAWN_PLAT_SIZE:        3,
   WARMUP_COUNT:           4,
