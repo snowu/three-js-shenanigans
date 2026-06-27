@@ -48,9 +48,18 @@ const bestEl = document.getElementById('score-best')
 const speedEl = document.getElementById('speed-meter')
 const airJumpsEl = document.getElementById('air-jumps')
 const stateEl = document.getElementById('player-state')
+const timerEl = document.getElementById('timer')
 let score = 0
 let bestScore = 0
+let runTime = 0
+let timerStarted = false
 const touchedBoxes = new Set()
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
 
 physics.onBoxLand = (obs) => {
   if (obs.isSpawn || touchedBoxes.has(obs)) return
@@ -74,7 +83,10 @@ physics.onWallRun = () => {
 
 physics.onGroundHit = () => {
   score = 0
+  runTime = 0
+  timerStarted = false
   scoreEl.textContent = score
+  timerEl.textContent = formatTime(0)
   touchedBoxes.clear()
   if (cameraController.mode === 'first-person') {
     physics._respawn(humanoid)
@@ -93,6 +105,7 @@ function makeWireBox(w, h, d, color) {
 }
 
 let obstacleHelpers = []
+let ledgeHelpers = []
 let hitboxesVisible = false
 let kickHelper = null
 let _prevPW = config.PLAYER_WIDTH, _prevPH = config.PLAYER_HEIGHT
@@ -122,6 +135,7 @@ function rebuildPlayerHelper() {
 
 function rebuildObstacleHelpers() {
   obstacleHelpers.forEach(h => scene.remove(h))
+  ledgeHelpers.forEach(h => scene.remove(h))
   const allObs = courses.flatMap(c => c.allObstacles)
   obstacleHelpers = allObs.map(({ aabb }) => {
     const size   = new THREE.Vector3()
@@ -134,12 +148,24 @@ function rebuildObstacleHelpers() {
     scene.add(h)
     return h
   })
+  ledgeHelpers = allObs.filter(o => o.ledgeAABB).map(({ ledgeAABB }) => {
+    const size   = new THREE.Vector3()
+    const center = new THREE.Vector3()
+    ledgeAABB.getSize(size)
+    ledgeAABB.getCenter(center)
+    const h = makeWireBox(size.x, size.y, size.z, 0x00ffff)
+    h.position.copy(center)
+    h.visible = hitboxesVisible
+    scene.add(h)
+    return h
+  })
 }
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH' && !e.shiftKey && !e.ctrlKey && !e.altKey) {
     hitboxesVisible = !hitboxesVisible
     obstacleHelpers.forEach(h => { h.visible = hitboxesVisible })
+    ledgeHelpers.forEach(h => { h.visible = hitboxesVisible })
     upperHelper.visible = hitboxesVisible
     lowerHelper.visible = hitboxesVisible
   }
@@ -206,6 +232,9 @@ function animate(timestamp) {
     kickHelper.visible = false
   }
 
+  if (!timerStarted && physics.horizontalSpeed > 0.1) timerStarted = true
+  if (timerStarted) runTime += delta
+  timerEl.textContent = formatTime(runTime)
   speedEl.textContent = physics.horizontalSpeed.toFixed(1)
   airJumpsEl.textContent = physics._airJumpsLeft
   stateEl.textContent = physics.state

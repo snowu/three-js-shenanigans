@@ -5,6 +5,7 @@ const STATE = {
   GROUNDED:    'grounded',
   AIRBORNE:    'airborne',
   HANGING:     'hanging',
+  PULLING_UP:  'pullingUp',
   WALLRUNNING: 'wallrunning',
 }
 
@@ -31,6 +32,12 @@ export class Physics {
     this._wallrunEntrySpeed = 0
     this._wallrunGraceTimer = 0
     this._legsExtended = false
+    this._pullUpTimer = 0
+    this._pullUpStartY = 0
+    this._pullUpStartZ = 0
+    this._pullUpTargetY = 0
+    this._pullUpTargetZ = 0
+    this._speedFloor = config.MOVE_SPEED_MIN
   }
 
   get state() { return this._state }
@@ -95,12 +102,17 @@ export class Physics {
     if (this._wallKickTimer > 0) this._wallKickTimer -= delta
     if (this._wallrunGraceTimer > 0) this._wallrunGraceTimer -= delta
 
+    // Recover speed floor once speed reaches MOVE_SPEED_MIN
+    if (this._speedFloor < config.MOVE_SPEED_MIN && this._moveSpeed >= config.MOVE_SPEED_MIN) {
+      this._speedFloor = config.MOVE_SPEED_MIN
+    }
+
     // Sync _moveSpeed to actual horizontal speed so any drop is reflected
     // Skip during wall run — forced velocity.x=0 would artificially reduce it
     if (this._state !== STATE.WALLRUNNING) {
       const currentHSpeed = this.horizontalSpeed
       if (currentHSpeed < this._moveSpeed) {
-        this._moveSpeed = Math.max(currentHSpeed, config.MOVE_SPEED_MIN)
+        this._moveSpeed = Math.max(currentHSpeed, this._speedFloor)
       }
     }
 
@@ -108,17 +120,17 @@ export class Physics {
     const isMoving = moveDir.x !== 0 || moveDir.z !== 0
     if (isMoving) {
       if (this._state === STATE.WALLRUNNING && moveDir.x * this._wallNormalX < 0 && this._wallrunGraceTimer <= 0) {
-        this._moveSpeed = config.MOVE_SPEED_MIN
+        this._moveSpeed = this._speedFloor
       } else {
         this._moveSpeed = Math.min(this._moveSpeed + config.MOVE_ACCEL * delta, config.MOVE_SPEED_MAX)
       }
     } else {
-      this._moveSpeed = config.MOVE_SPEED_MIN
+      this._moveSpeed = this._speedFloor
     }
 
     const boostedSpeed = this._moveSpeed + this._speedBoost
 
-    if (this._state === STATE.HANGING) {
+    if (this._state === STATE.HANGING || this._state === STATE.PULLING_UP) {
       this.velocity.set(0, 0, 0)
     } else if (this._state === STATE.WALLRUNNING) {
       this.velocity.x = -this._wallNormalX * config.WALLRUN_STICK_SPEED
@@ -156,7 +168,7 @@ export class Physics {
 
       // AABB collision vs obstacles
       touchingWall = false
-      if (this._state !== STATE.HANGING) {
+      if (this._state !== STATE.HANGING && this._state !== STATE.PULLING_UP) {
         for (const obs of obstacles) {
           if (obs.isBillboard) {
             if (this._wallKickTimer > 0) continue
@@ -292,14 +304,36 @@ export class Physics {
       this._checkLedgeGrab(humanoid, obstacles)
     }
 
-    // 8. Hanging actions — pull up (W/jump) or drop (S)
-    if (wasHanging) {
-      if (jumpPressed || wDown) {
-        this._pullUp(humanoid)
-      } else if (sDown) {
-        this._state = STATE.AIRBORNE
-        this.velocity.set(0, 0, 0)
+    // 8. Pulling up — automatic, lerp to platform top
+    if (this._state === STATE.PULLING_UP) {
+      this._pullUpTimer -= delta
+      const total = config.LEDGE_PULLUP_TIME
+      const t = Math.min(1, 1 - this._pullUpTimer / total)
+      humanoid.position.y = this._pullUpStartY + (this._pullUpTargetY - this._pullUpStartY) * t
+      humanoid.position.z = this._pullUpStartZ + (this._pullUpTargetZ - this._pullUpStartZ) * t
+      this.velocity.set(0, 0, 0)
+      if (this._pullUpTimer <= 0) {
+        humanoid.position.y = this._pullUpTargetY
+        humanoid.position.z = this._pullUpTargetZ
+        this._state = STATE.GROUNDED
+        this._moveSpeed = config.LEDGE_PULLUP_SPEED
+        this._speedFloor = config.LEDGE_PULLUP_SPEED
+        this._speedBoost = 0
+        supportedThisFrame = true
+        if (this.onPullUp) this.onPullUp()
       }
+    }
+
+    // Hanging — auto-start pull-up
+    if (wasHanging && this._state === STATE.HANGING) {
+      this._state = STATE.PULLING_UP
+      this._pullUpTimer = config.LEDGE_PULLUP_TIME
+      this._pullUpStartY = humanoid.position.y
+      this._pullUpStartZ = humanoid.position.z
+      this._pullUpTargetY = this._hangTopY
+      const aabb = this._hangAABB
+      const centerZ = (aabb.min.z + aabb.max.z) / 2
+      this._pullUpTargetZ = centerZ
     }
   }
 
@@ -403,35 +437,24 @@ export class Physics {
 
     for (const obs of obstacles) {
       if (obs.isBillboard) continue
-      const { aabb } = obs
-      const topY = aabb.max.y
+      const grabBox = obs.ledgeAABB || obs.aabb
+      const topY = obs.aabb.max.y
 
-      // Hands must be within grab range of the box top
       if (handsY < topY - config.LEDGE_REACH || handsY > topY) continue
 
-      // Must be near the box horizontally
-      if (px < aabb.min.x - config.LEDGE_H_MARGIN || px > aabb.max.x + config.LEDGE_H_MARGIN) continue
-      if (pz < aabb.min.z - config.LEDGE_H_MARGIN || pz > aabb.max.z + config.LEDGE_H_MARGIN) continue
+      if (px < grabBox.min.x - config.LEDGE_H_MARGIN || px > grabBox.max.x + config.LEDGE_H_MARGIN) continue
+      if (pz < grabBox.min.z - config.LEDGE_H_MARGIN || pz > grabBox.max.z + config.LEDGE_H_MARGIN) continue
 
-      // Snap hands to ledge height
       humanoid.position.y = topY - config.HAND_OFFSET_Y
       this._state    = STATE.HANGING
       this._hangTopY = topY
+      this._hangAABB = obs.aabb
       this._speedBoost = 0
       this._moveSpeed = config.MOVE_SPEED_MIN
       this.velocity.set(0, 0, 0)
       if (this.onGrab) this.onGrab()
       return
     }
-  }
-
-  _pullUp(humanoid) {
-    humanoid.position.y = this._hangTopY
-    this.velocity.set(0, 0, 0)
-    this._state = STATE.GROUNDED
-    this._moveSpeed = config.MOVE_SPEED_MIN
-    this._speedBoost = 0
-    if (this.onPullUp) this.onPullUp()
   }
 
   _respawn(humanoid) {
@@ -443,6 +466,8 @@ export class Physics {
     this._wallKickTimer = 0
     this._speedBoost = 0
     this._moveSpeed = config.MOVE_SPEED_MIN
+    this._speedFloor = config.MOVE_SPEED_MIN
+    this._pullUpTimer = 0
   }
 
   static spawnPosition() {

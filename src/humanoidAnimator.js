@@ -69,12 +69,12 @@ export class HumanoidAnimator {
       if (this._stateTimer >= config.ANIM_LANDING_DURATION) {
         this._setState(hSpeed > 0.5 ? ANIM_STATE.RUNNING : ANIM_STATE.IDLE)
       }
-    } else if (this._state === ANIM_STATE.PULL_UP) {
-      if (this._stateTimer >= config.ANIM_PULLUP_DURATION) {
-        this._setState(ANIM_STATE.IDLE)
-      }
-    } else if (this._state !== ANIM_STATE.HANGING) {
-      if (phys.state === 'wallrunning') {
+    } else if (this._state === ANIM_STATE.PULL_UP && phys.state !== 'pullingUp') {
+      this._setState(ANIM_STATE.IDLE)
+    } else if (this._state !== ANIM_STATE.HANGING && this._state !== ANIM_STATE.PULL_UP) {
+      if (phys.state === 'pullingUp') {
+        this._setState(ANIM_STATE.PULL_UP)
+      } else if (phys.state === 'wallrunning') {
         this._setState(ANIM_STATE.WALLRUN)
       } else if (phys.state === 'grounded') {
         if (hSpeed > 0.5) {

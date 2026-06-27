@@ -40,10 +40,17 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
   const dims = gui.addFolder('Player Dimensions')
   dims.add(config, 'PLAYER_WIDTH', 0.1, 3, 0.05)
   dims.add(config, 'PLAYER_HEIGHT', 0.5, 5, 0.1)
-  dims.add(config, 'HAND_OFFSET_Y', 0, 4, 0.1)
-  dims.add(config, 'LEDGE_REACH', 0, 2, 0.05)
-  dims.add(config, 'LEDGE_H_MARGIN', 0, 2, 0.05)
   dims.close()
+
+  // ── Ledge Grab ────────────────────────────────────────────────────────────
+  const ledge = gui.addFolder('Ledge Grab')
+  ledge.add(config, 'HAND_OFFSET_Y', 0, 4, 0.1).name('Hand Offset Y')
+  ledge.add(config, 'LEDGE_REACH', 0, 2, 0.05).name('Reach')
+  ledge.add(config, 'LEDGE_H_MARGIN', 0, 2, 0.05).name('H Margin')
+  ledge.add(config, 'LEDGE_GRAB_EXTEND', 0, 5, 0.25).name('Grab Extend').onFinishChange(rebuildCourses)
+  ledge.add(config, 'LEDGE_PULLUP_TIME', 0.1, 3, 0.1).name('Pull-Up Time')
+  ledge.add(config, 'LEDGE_PULLUP_SPEED', 0, 15, 0.5).name('Pull-Up Speed')
+  ledge.close()
 
   // ── World ─────────────────────────────────────────────────────────────────
   const world = gui.addFolder('World')
@@ -111,7 +118,7 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
   plat.add(config, 'BOX_MAX_HEIGHT', 0.1, 5, 0.1).name('Box Max Height').onFinishChange(rebuildCourses)
   plat.add(config, 'BOX_MIN_DEPTH', 0.5, 10, 0.25).name('Box Min Depth').onFinishChange(rebuildCourses)
   plat.add(config, 'BOX_MAX_DEPTH', 0.5, 15, 0.25).name('Box Max Depth').onFinishChange(rebuildCourses)
-  plat.add(config, 'SPAWN_PLAT_SIZE', 1, 10, 0.5).name('Spawn Platform').onFinishChange(rebuildCourses)
+  plat.add(config, 'SPAWN_PLAT_SIZE', 1, 10, 0.5).name('Spawn Platform Size').onFinishChange(rebuildCourses)
   plat.add(config, 'WARMUP_COUNT', 0, 10, 1).name('Warmup Platforms').onFinishChange(rebuildCourses)
   plat.add(config, 'DOUBLE_JUMP_SIZE_SCALE', 0.1, 1.5, 0.05).name('DblJump Size Scale').onFinishChange(rebuildCourses)
   plat.close()

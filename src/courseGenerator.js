@@ -343,8 +343,11 @@ export class CourseManager {
       )
       mesh.position.set(b.x, b.y, b.z)
       const aabb = new THREE.Box3().setFromObject(mesh)
+      const ext = config.LEDGE_GRAB_EXTEND
+      const ledgeAABB = aabb.clone()
+      ledgeAABB.max.z += ext
       meshes.push(mesh)
-      obstacles.push({ mesh, aabb, isSpawn: !!b.isSpawn })
+      obstacles.push({ mesh, aabb, ledgeAABB, isSpawn: !!b.isSpawn })
     })
 
     // Billboards placed in gaps between platforms
