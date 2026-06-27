@@ -10,66 +10,55 @@ const BILLBOARD_VERT = `
   }
 `
 
+const SNOISE_GLSL = `
+vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec2 mod289(vec2 x){return x-floor(x*(1.0/289.0))*289.0;}
+vec3 permute(vec3 x){return mod289(((x*34.0)+1.0)*x);}
+float snoise(vec2 v){
+  const vec4 C=vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
+  vec2 i=floor(v+dot(v,C.yy));vec2 x0=v-i+dot(i,C.xx);
+  vec2 i1=(x0.x>x0.y)?vec2(1.0,0.0):vec2(0.0,1.0);
+  vec4 x12=x0.xyxy+C.xxzz;x12.xy-=i1;i=mod289(i);
+  vec3 p=permute(permute(i.y+vec3(0.0,i1.y,1.0))+i.x+vec3(0.0,i1.x,1.0));
+  vec3 m=max(0.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.0);
+  m=m*m;m=m*m;
+  vec3 x2=2.0*fract(p*C.www)-1.0;vec3 h=abs(x2)-0.5;
+  vec3 ox=floor(x2+0.5);vec3 a0=x2-ox;
+  m*=1.79284291400159-0.85373472095314*(a0*a0+h*h);
+  vec3 g;g.x=a0.x*x0.x+h.x*x0.y;g.yz=a0.yz*x12.xz+h.yz*x12.yw;
+  return 130.0*dot(m,g);
+}
+`
+
 const BILLBOARD_FRAG = `
+  ${SNOISE_GLSL}
   uniform float time;
   varying vec2 vUv;
   varying vec3 vWorldPos;
 
-  float hash(vec2 p){
-    return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453);
-  }
-
   void main(){
-    // Dark metal base
-    vec3 baseMetal = vec3(0.08, 0.08, 0.1);
-    float grain = hash(floor(vWorldPos.xz * 20.0)) * 0.03;
-    vec3 color = baseMetal + grain;
+    // Rusty metal base
+    float rust = snoise(vWorldPos.xz * 3.0) * 0.5 + 0.5;
+    vec3 darkMetal = vec3(0.06, 0.05, 0.05);
+    vec3 rustColor = vec3(0.15, 0.07, 0.03);
+    vec3 base = mix(darkMetal, rustColor, rust * 0.4);
 
-    // Diagonal caution chevrons — yellow/black
-    float chevronScale = 3.0;
-    float diag = vUv.x * chevronScale + vUv.y * chevronScale;
-    float chevron = step(0.5, fract(diag));
+    // Neon warning stripe at 70% height
+    float stripeDist = abs(vUv.y - 0.7);
+    float neonStripe = smoothstep(0.02, 0.0, stripeDist);
+    float pulse = sin(time * 2.5 + vWorldPos.z * 0.5) * 0.15 + 0.85;
+    vec3 neonColor = vec3(1.0, 0.35, 0.0);
+    vec3 color = base + neonColor * neonStripe * pulse * 1.8;
 
-    // Restrict chevrons to horizontal bands
-    float bandY = fract(vUv.y * 4.0);
-    float inBand = step(0.7, bandY);
+    // Thin accent line at 30%
+    float accent = smoothstep(0.01, 0.0, abs(vUv.y - 0.3));
+    color += vec3(0.8, 0.15, 0.0) * accent * 0.6;
 
-    float chevronMask = chevron * inBand;
-    vec3 cautionYellow = vec3(1.0, 0.75, 0.0);
-    vec3 cautionBlack = vec3(0.02, 0.02, 0.02);
-    vec3 chevronColor = mix(cautionBlack, cautionYellow, chevronMask);
-
-    // Blend chevron bands onto base
-    color = mix(color, chevronColor, inBand * 0.9);
-
-    // Neon edge strips — top and bottom glow
-    float edgeDist = min(vUv.y, 1.0 - vUv.y);
-    float edgeGlow = smoothstep(0.05, 0.0, edgeDist);
-    float pulse = sin(time * 3.0) * 0.3 + 0.7;
-    vec3 neonOrange = vec3(1.0, 0.3, 0.0);
-    color += neonOrange * edgeGlow * pulse * 2.0;
-
-    // Horizontal neon strip at center
-    float centerDist = abs(vUv.y - 0.5);
-    float centerGlow = smoothstep(0.03, 0.0, centerDist);
-    vec3 neonRed = vec3(1.0, 0.1, 0.05);
-    float centerPulse = sin(time * 2.0 + 1.5) * 0.25 + 0.75;
-    color += neonRed * centerGlow * centerPulse * 1.5;
-
-    // Hazard triangle symbol in each band gap
-    float gapY = fract(vUv.y * 4.0);
-    float inGap = 1.0 - inBand;
-    float gapCenterY = (gapY - 0.35) / 0.35;
-    float gapCenterX = (fract(vUv.x * 2.0) - 0.5) * 2.0;
-    float triDist = max(abs(gapCenterX) - (1.0 - gapCenterY) * 0.5, -gapCenterY);
-    float triMask = smoothstep(0.02, 0.0, triDist) * step(0.0, gapCenterY) * inGap;
-    vec3 warnRed = vec3(1.0, 0.15, 0.0);
-    float triPulse = sin(time * 1.5 + vWorldPos.z * 0.3) * 0.2 + 0.8;
-    color += warnRed * triMask * triPulse * 0.8;
-
-    // Scanline effect
-    float scanline = sin(vWorldPos.y * 40.0 + time * 5.0) * 0.5 + 0.5;
-    color *= 0.9 + scanline * 0.1;
+    // Corner rivets
+    vec2 rivetUV = fract(vUv * vec2(2.0, 6.0)) - 0.5;
+    float rivet = smoothstep(0.08, 0.05, length(rivetUV));
+    float rivetGrid = step(0.9, fract(vUv.x * 2.0)) * step(0.85, fract(vUv.y * 6.0));
+    color += vec3(0.3) * rivet * rivetGrid;
 
     gl_FragColor = vec4(color, 1.0);
   }
