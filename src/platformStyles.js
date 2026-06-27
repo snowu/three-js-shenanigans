@@ -57,21 +57,21 @@ const VOLCANIC_FRAG = `
     vec2 uv = vWorldPos.xz * 0.6;
     float t = time * 0.15;
     float rockNoise = fbm(uv * 1.0, 3.0);
-    vec3 darkRock = vec3(0.04, 0.025, 0.015);
-    vec3 lightRock = vec3(0.09, 0.055, 0.035);
+    vec3 darkRock = vec3(0.07, 0.04, 0.025);
+    vec3 lightRock = vec3(0.14, 0.08, 0.05);
     vec3 rock = mix(darkRock, lightRock, rockNoise * 0.5 + 0.5);
     float crack = abs(snoise(uv * 1.0 + t * 0.08));
     float crackMask = 1.0 - smoothstep(0.0, 0.22, crack);
-    crackMask = pow(crackMask, 2.0) * 0.5;
+    crackMask = pow(crackMask, 1.5) * 0.7;
     float heat = snoise(uv * 0.7 + t * 0.2) * 0.5 + 0.5;
-    vec3 crackColor = mix(vec3(0.7, 0.1, 0.0), vec3(1.0, 0.45, 0.05), heat);
-    float pulse = sin(time * 1.0 + snoise(uv * 0.5) * 3.0) * 0.1 + 0.9;
+    vec3 crackColor = mix(vec3(0.8, 0.15, 0.0), vec3(1.0, 0.5, 0.05), heat);
+    float pulse = sin(time * 1.0 + snoise(uv * 0.5) * 3.0) * 0.15 + 0.85;
     crackMask *= pulse;
-    vec3 color = mix(rock, crackColor * 1.5, crackMask);
-    float emissive = crackMask * 0.8;
+    vec3 color = mix(rock, crackColor * 2.0, crackMask);
     vec3 lightDir = normalize(vec3(0.5, 0.8, 0.3));
     float diff = max(dot(vNormal, lightDir), 0.0) * 0.5 + 0.5;
-    gl_FragColor = vec4(color * diff + crackColor * emissive * 0.15, 1.0);
+    vec3 glow = crackColor * crackMask * 1.2;
+    gl_FragColor = vec4(color * diff + glow, 1.0);
   }
 `
 
