@@ -1,4 +1,4 @@
-const IGNORE = '#fullscreen-btn, #cam-mode-btn'
+const IGNORE = '#fullscreen-btn, #cam-mode-btn, #help-btn, #help-modal'
 
 export class TouchJoystick {
   constructor({ radius = 50 } = {}) {
