@@ -67,11 +67,13 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
   const slotDepth = SEGMENT_DEPTH / count
   let platIndex = platformCounter
 
+  let afterGapSide = 0 // 0 = no constraint, -1/1 = force next platform to this side
+
   for (let i = 0; i < count; i++) {
     // Insert billboard gap before this platform?
     if (platIndex > 0 && platIndex % BILLBOARD_GAP_EVERY === 0 && !isFirstSegment) {
       const prevTopY = prev.y + prev.h / 2
-      const side = ((platIndex / BILLBOARD_GAP_EVERY) % 2 === 0) ? -1 : 1
+      const side = prev.x >= 0 ? 1 : -1
       const gapMidZ = nextZ - BILLBOARD_GAP_SIZE / 2
       billboards.push({
         x: side * BILLBOARD_X_OFFSET,
@@ -80,6 +82,7 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
         side,
       })
       nextZ -= BILLBOARD_GAP_SIZE
+      afterGapSide = side
     }
 
     const prevTopY = prev.y + prev.h / 2
@@ -103,16 +106,24 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
     const sizeScale = needsDoubleJump ? 0.8 : 1.0
     const warmupSizeBonus = warmupT < 1 ? 1 + (1 - warmupT) * 0.5 : 1.0
-    const w = rand(1.5, 3) * sizeScale * warmupSizeBonus
-    const h = rand(0.5, 2)
-    const d = rand(1.5, 3) * sizeScale * warmupSizeBonus
+    const w = rand(2, 4) * sizeScale * warmupSizeBonus
+    const h = rand(0.3, 0.8)
+    const d = rand(2, 4) * sizeScale * warmupSizeBonus
 
     const pz = nextZ - slotDepth / 2 + rand(-slotDepth * 0.2, slotDepth * 0.2)
     nextZ -= slotDepth
 
-    const baseLateralRange = Math.min(6, CORRIDOR_WIDTH / 2 - 1)
-    const lateralRange = baseLateralRange * warmupT
-    const px = clamp(prev.x + rand(-lateralRange, lateralRange), -halfW + w / 2, halfW - w / 2)
+    let px
+    if (afterGapSide !== 0) {
+      // First platform after gap: spawn on same side as billboard wall
+      const targetX = afterGapSide * (BILLBOARD_X_OFFSET - 3)
+      px = clamp(targetX + rand(-1, 1), -halfW + w / 2, halfW - w / 2)
+      afterGapSide = 0
+    } else {
+      const baseLateralRange = Math.min(6, CORRIDOR_WIDTH / 2 - 1)
+      const lateralRange = baseLateralRange * warmupT
+      px = clamp(prev.x + rand(-lateralRange, lateralRange), -halfW + w / 2, halfW - w / 2)
+    }
 
     const newTopY = prevTopY + dy
     const py = clamp(Math.max(h / 2, newTopY), h / 2 + 0.5, CORRIDOR_HEIGHT - h / 2 - 1)

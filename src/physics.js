@@ -5,7 +5,8 @@ import {
   PLAYER_WIDTH, PLAYER_HEIGHT, HAND_OFFSET_Y, LEDGE_REACH, LEDGE_H_MARGIN,
   COYOTE_TIME, MAX_AIR_JUMPS,
   WALLRUN_SLIDE_SPEED, WALLRUN_JUMP_SPEED, WALLRUN_KICK_SPEED, WALLRUN_KICK_DURATION, WALLRUN_MIN_HEIGHT,
-  WALLRUN_SPEED_BOOST, WALLRUN_MAX_BOOST,
+  WALLRUN_SPEED_BOOST, WALLRUN_MAX_BOOST, WALLRUN_GRACE_TIME, WALLRUN_STICK_SPEED,
+  GROUND_STICK,
 } from './config.js'
 
 const STATE = {
@@ -36,6 +37,7 @@ export class Physics {
     this._speedBoost = 0
     this._moveSpeed = MOVE_SPEED_MIN
     this._wallrunEntrySpeed = 0
+    this._wallrunGraceTimer = 0
   }
 
   get state() { return this._state }
@@ -60,7 +62,7 @@ export class Physics {
         this.velocity.x = this._wallNormalX * WALLRUN_KICK_SPEED
         this._wallKickTimer = WALLRUN_KICK_DURATION
         this._state = STATE.AIRBORNE
-        this._airJumpsLeft = MAX_AIR_JUMPS
+        this._airJumpsLeft = MAX_AIR_JUMPS + 1
       } else if (this._state === STATE.GROUNDED || this._coyoteTimer > 0) {
         this.velocity.y = JUMP_SPEED
         this._state = STATE.AIRBORNE
@@ -74,7 +76,9 @@ export class Physics {
     }
 
     // 2. Gravity
-    if (this._state === STATE.AIRBORNE) {
+    if (this._state === STATE.GROUNDED) {
+      this.velocity.y = -GROUND_STICK
+    } else if (this._state === STATE.AIRBORNE) {
       this.velocity.y -= GRAVITY * delta
       if (this._coyoteTimer > 0) this._coyoteTimer -= delta
     } else if (this._state === STATE.WALLRUNNING) {
@@ -86,6 +90,7 @@ export class Physics {
 
     // 3. Horizontal velocity from input
     if (this._wallKickTimer > 0) this._wallKickTimer -= delta
+    if (this._wallrunGraceTimer > 0) this._wallrunGraceTimer -= delta
 
     // Sync _moveSpeed to actual horizontal speed so any drop is reflected
     // Skip during wall run — forced velocity.x=0 would artificially reduce it
@@ -100,7 +105,11 @@ export class Physics {
     const isMoving = moveDir.x !== 0 || moveDir.z !== 0
     const onSolid = this._state === STATE.GROUNDED || this._state === STATE.WALLRUNNING
     if (isMoving && onSolid) {
-      this._moveSpeed = Math.min(this._moveSpeed + MOVE_ACCEL * delta, MOVE_SPEED_MAX)
+      if (this._state === STATE.WALLRUNNING && moveDir.x * this._wallNormalX < 0 && this._wallrunGraceTimer <= 0) {
+        this._moveSpeed = MOVE_SPEED_MIN
+      } else {
+        this._moveSpeed = Math.min(this._moveSpeed + MOVE_ACCEL * delta, MOVE_SPEED_MAX)
+      }
     } else if (!onSolid) {
       // Airborne: keep current speed, don't gain or lose
     } else {
@@ -112,7 +121,7 @@ export class Physics {
     if (this._state === STATE.HANGING) {
       this.velocity.set(0, 0, 0)
     } else if (this._state === STATE.WALLRUNNING) {
-      this.velocity.x = 0
+      this.velocity.x = -this._wallNormalX * WALLRUN_STICK_SPEED
       this.velocity.z = moveDir.z * boostedSpeed
     } else if (this._wallKickTimer > 0) {
       this.velocity.z = moveDir.z * boostedSpeed
@@ -152,12 +161,16 @@ export class Physics {
           if (obs.isBillboard) {
             if (this._wallKickTimer > 0) continue
             const hitAxis = this._resolveAABBAxis(humanoid, obs.aabb)
-            if (hitAxis !== null) touchingWall = true
+            if (hitAxis !== null) {
+              touchingWall = true
+              this._airJumpsLeft = MAX_AIR_JUMPS
+            }
             if (hitAxis === 'x' && this._state === STATE.AIRBORNE &&
                 humanoid.position.y > WALLRUN_MIN_HEIGHT) {
               this._state = STATE.WALLRUNNING
               this._wallNormalX = obs.wallNormalX
               this._wallrunEntrySpeed = this._moveSpeed
+              this._wallrunGraceTimer = WALLRUN_GRACE_TIME
               this.velocity.y = Math.max(this.velocity.y, 0)
               this._airJumpsLeft = MAX_AIR_JUMPS
               if (this.onWallRun) this.onWallRun()
@@ -189,8 +202,8 @@ export class Physics {
       this._coyoteTimer = COYOTE_TIME
     }
 
-    // Reset air jumps when grounded
-    if (this._state === STATE.GROUNDED) {
+    // Reset air jumps when grounded or wall running
+    if (this._state === STATE.GROUNDED || this._state === STATE.WALLRUNNING) {
       this._airJumpsLeft = MAX_AIR_JUMPS
     }
 
@@ -230,11 +243,14 @@ export class Physics {
     const oy = Math.min(oyUp, oyDown)
     const oz = Math.min(pMaxZ - aabb.min.z, aabb.max.z - pMinZ)
 
+    // Bias toward Y when feet barely penetrate box top (thin box fix)
+    const feetOnTop = oyUp < oyDown && oyUp < 0.5 && py > (aabb.min.y + aabb.max.y) / 2
+
     // Push out on axis of minimum penetration
-    if (ox <= oy && ox <= oz) {
+    if (!feetOnTop && ox <= oy && ox <= oz) {
       const sign = px < (aabb.min.x + aabb.max.x) / 2 ? -1 : 1
       humanoid.position.x += sign * ox
-    } else if (oy <= ox && oy <= oz) {
+    } else if (feetOnTop || (oy <= ox && oy <= oz)) {
       if (oyUp <= oyDown) {
         // Feet just below box top — push up, land on top
         humanoid.position.y += oyUp
@@ -278,11 +294,13 @@ export class Physics {
     const oy = Math.min(oyUp, oyDown)
     const oz = Math.min(pMaxZ - aabb.min.z, aabb.max.z - pMinZ)
 
-    if (ox <= oy && ox <= oz) {
+    const feetOnTop = oyUp < oyDown && oyUp < 0.5 && py > (aabb.min.y + aabb.max.y) / 2
+
+    if (!feetOnTop && ox <= oy && ox <= oz) {
       const sign = px < (aabb.min.x + aabb.max.x) / 2 ? -1 : 1
       humanoid.position.x += sign * ox
       return 'x'
-    } else if (oy <= ox && oy <= oz) {
+    } else if (feetOnTop || (oy <= ox && oy <= oz)) {
       if (oyUp <= oyDown) {
         humanoid.position.y += oyUp
         this.velocity.y = 0

@@ -44,6 +44,8 @@ cameraController.animator = animator
 const scoreEl = document.getElementById('score-current')
 const bestEl = document.getElementById('score-best')
 const speedEl = document.getElementById('speed-meter')
+const airJumpsEl = document.getElementById('air-jumps')
+const stateEl = document.getElementById('player-state')
 let score = 0
 let bestScore = 0
 const touchedBoxes = new Set()
@@ -51,6 +53,15 @@ const touchedBoxes = new Set()
 physics.onBoxLand = (obs) => {
   if (obs.isSpawn || touchedBoxes.has(obs)) return
   touchedBoxes.add(obs)
+  score++
+  scoreEl.textContent = score
+  if (score > bestScore) {
+    bestScore = score
+    bestEl.textContent = bestScore
+  }
+}
+
+physics.onWallRun = () => {
   score++
   scoreEl.textContent = score
   if (score > bestScore) {
@@ -141,6 +152,8 @@ function animate(timestamp) {
   )
 
   speedEl.textContent = physics.horizontalSpeed.toFixed(1)
+  airJumpsEl.textContent = physics._airJumpsLeft
+  stateEl.textContent = physics.state
   updateGround(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   updateSky(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   renderer.render(scene, camera)

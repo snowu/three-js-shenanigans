@@ -9,6 +9,7 @@ export const MOVE_SPEED_MAX = 15    // m/s cap after acceleration
 export const MOVE_ACCEL     = 0.5   // m/s² speed increase while moving
 export const MOVE_SPEED     = MOVE_SPEED_MIN // alias for derived calculations
 export const COYOTE_TIME   = 0.50  // seconds after walking off edge where jump still works
+export const GROUND_STICK  = 2     // downward speed when grounded to maintain surface contact
 export const MAX_AIR_JUMPS = 1     // extra jumps allowed while airborne (double jump)
 
 // ── player dimensions ────────────────────────────────────────────────────────
@@ -49,6 +50,8 @@ export const WALLRUN_KICK_DURATION = 0.3 // seconds the kick overrides input
 export const WALLRUN_SPEED_BOOST  = 3   // extra m/s added on wall jump
 export const WALLRUN_MAX_BOOST    = 8   // cap on accumulated boost
 export const WALLRUN_MIN_HEIGHT = 1.5    // min Y above ground to start wall run
+export const WALLRUN_GRACE_TIME = 1.0   // seconds before pressing into wall drops speed
+export const WALLRUN_STICK_SPEED = 2    // speed pushing player into wall to maintain contact
 export const BILLBOARD_WIDTH    = 0.5    // thickness of billboard panels
 export const BILLBOARD_HEIGHT   = 10     // how tall they are
 export const BILLBOARD_DEPTH    = 15     // how long along Z

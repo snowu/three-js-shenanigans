@@ -12,13 +12,15 @@
   <body>
     <div id="score-hud" style="
       position: fixed; top: 20px; right: 20px;
-      font-family: monospace; font-size: 18px; color: #fff;
+      font-family: monospace; font-size: 24px; color: #fff;
       text-align: right; pointer-events: none; user-select: none;
       text-shadow: 0 0 6px rgba(0,0,0,0.8);
     ">
       <div>Score: <span id="score-current">0</span></div>
-      <div style="font-size: 14px; color: #aaa;">Best: <span id="score-best">0</span></div>
-      <div style="font-size: 14px; color: #f80; margin-top: 8px;">Speed: <span id="speed-meter">0</span></div>
+      <div style="font-size: 20px; color: #aaa;">Best: <span id="score-best">0</span></div>
+      <div style="font-size: 20px; color: #f80; margin-top: 8px;">Speed: <span id="speed-meter">0</span></div>
+      <div style="font-size: 20px; color: #8cf; margin-top: 4px;">Jumps: <span id="air-jumps">0</span></div>
+      <div style="font-size: 20px; color: #aaa; margin-top: 4px;">State: <span id="player-state">-</span></div>
     </div>
     <script>
       window.DEV_MODE = location.hostname === 'localhost' || location.hostname === '';
