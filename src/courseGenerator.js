@@ -1,23 +1,11 @@
-import { MOVE_SPEED } from './physics.js'
+import {
+  MOVE_SPEED, CORRIDOR_WIDTH, CORRIDOR_HEIGHT, SEGMENT_DEPTH, WALL_THICKNESS,
+  FOG_END, GENERATE_TIME_AHEAD,
+  SINGLE_JUMP_HEIGHT, DOUBLE_JUMP_HEIGHT,
+  MAX_H_RANGE_SINGLE, MAX_H_RANGE_DOUBLE,
+} from './config.js'
 
-const GRAVITY    = 20
-const JUMP_SPEED = 8
-
-const SINGLE_JUMP_HEIGHT = (JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY)
-const SINGLE_JUMP_TIME   = (2 * JUMP_SPEED) / GRAVITY
-const DOUBLE_JUMP_HEIGHT = SINGLE_JUMP_HEIGHT * 2
-const DOUBLE_JUMP_TIME   = SINGLE_JUMP_TIME * 2
-const MAX_H_RANGE_SINGLE = MOVE_SPEED * SINGLE_JUMP_TIME
-const MAX_H_RANGE_DOUBLE = MOVE_SPEED * DOUBLE_JUMP_TIME
 const MAX_DROP = 8
-
-const CORRIDOR_WIDTH  = 14
-const CORRIDOR_HEIGHT = 12
-const SEGMENT_DEPTH   = 40
-const WALL_THICKNESS  = 0.5
-const GENERATE_TIME_AHEAD = 2   // seconds of travel buffer beyond fog
-const FOG_START        = 60
-const FOG_END          = 100
 const MIN_PLATFORM_SPACING = 1.5
 
 const DIFFICULTY = {
@@ -182,8 +170,6 @@ export class CourseManager {
     return { added, removed: [] }
   }
 
-  static get FOG_START() { return FOG_START }
-  static get FOG_END() { return FOG_END }
 
   _createSegment(THREE) {
     const index = this._nextSegmentIndex++
@@ -244,7 +230,4 @@ export class CourseManager {
     return { index, startZ, platforms, meshes, walls, wallAABBs, obstacles }
   }
 
-  getSpawnPosition() {
-    return { x: 0, y: 1, z: -3 }
-  }
 }

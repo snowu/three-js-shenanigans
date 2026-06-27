@@ -1,19 +1,9 @@
 import * as THREE from 'three'
-
-// ── tunables ──────────────────────────────────────────────────────────────────
-const GRAVITY        = 20    // m/s² downward acceleration
-const JUMP_SPEED     = 8     // m/s initial upward velocity on jump
-export const MOVE_SPEED = 15  // m/s horizontal speed
-const GROUND_Y       = 0     // y of the ground plane (death plane)
-let SPAWN_POS        = { x: 0, y: 1, z: -3 }
-const PLAYER_WIDTH   = 0.4   // AABB width and depth for collision
-const PLAYER_HEIGHT  = 2.0   // AABB height (feet to top of head)
-const HAND_OFFSET_Y  = 1.5   // y above feet where hands are (for ledge detection)
-const LEDGE_REACH    = 0.4   // max distance below box top where hands can grab
-const LEDGE_H_MARGIN = 0.3   // horizontal margin outside box footprint still counts
-const COYOTE_TIME    = 0.12  // seconds after walking off edge where jump still works
-const MAX_AIR_JUMPS  = 1     // extra jumps allowed while airborne (double jump)
-// ─────────────────────────────────────────────────────────────────────────────
+import {
+  GRAVITY, JUMP_SPEED, MOVE_SPEED, GROUND_Y, SPAWN_POS,
+  PLAYER_WIDTH, PLAYER_HEIGHT, HAND_OFFSET_Y, LEDGE_REACH, LEDGE_H_MARGIN,
+  COYOTE_TIME, MAX_AIR_JUMPS,
+} from './config.js'
 
 const STATE = {
   GROUNDED: 'grounded',
@@ -32,13 +22,11 @@ export class Physics {
 
   update(humanoid, moveDir, wDown, jumpPressed, delta, obstacles, wallAABBs = []) {
     // Snapshot hanging state before any transitions this frame.
-    // This prevents grab (step 7) and pull-up (step 8) firing in the same frame
-    // when W is held: the player grabs on frame N, pulls up on frame N+1.
+    // Prevents grab and pull-up firing in the same frame when W is held.
     const wasHanging = this._state === STATE.HANGING
 
-    // Tracks whether the ground plane or a box top supported the player this frame.
-    // Reset each frame; set in steps 5 and 6. If GROUNDED at end of frame but never
-    // set, the player walked off a box edge and must fall.
+    // Reset each frame; set in ground/collision steps. If GROUNDED at end
+    // of frame but never set, the player walked off a box edge and must fall.
     let supportedThisFrame = false
 
     // 1. Jump — grounded, coyote time, or air jump
@@ -98,8 +86,7 @@ export class Physics {
       }
     }
 
-    // If GROUNDED but nothing supported the player this frame, they walked off an edge.
-    // Start coyote timer so they can still jump for a short window.
+    // Walked off an edge — start coyote timer
     if (this._state === STATE.GROUNDED && !supportedThisFrame) {
       this._state = STATE.AIRBORNE
       this._coyoteTimer = COYOTE_TIME
@@ -115,14 +102,12 @@ export class Physics {
       this._checkLedgeGrab(humanoid, obstacles)
     }
 
-    // 8. Pull up — only if we were ALREADY hanging at the start of this frame.
-    // Using wasHanging prevents an immediate grab+pullup in the same frame.
+    // 8. Pull up — only if already hanging at start of frame
     if (wasHanging && (jumpPressed || wDown)) {
       this._pullUp(humanoid)
     }
   }
 
-  // Returns true if the player landed on top of this box (caller uses this to set supportedThisFrame).
   _resolveAABB(humanoid, aabb) {
     const hw = PLAYER_WIDTH / 2
     const px = humanoid.position.x
@@ -133,26 +118,20 @@ export class Physics {
     const pMinY = py;       const pMaxY = py + PLAYER_HEIGHT
     const pMinZ = pz - hw;  const pMaxZ = pz + hw
 
-    // Early-out if no intersection
     if (pMaxX <= aabb.min.x || pMinX >= aabb.max.x ||
         pMaxY <= aabb.min.y || pMinY >= aabb.max.y ||
         pMaxZ <= aabb.min.z || pMinZ >= aabb.max.z) return false
 
-    // Overlap on each axis
     const ox = Math.min(pMaxX - aabb.min.x, aabb.max.x - pMinX)
-
-    // Y: track which side is shallower
-    const oyUp   = aabb.max.y - pMinY   // box top above player feet  → push up
-    const oyDown = pMaxY - aabb.min.y   // player head above box floor → push down
+    const oyUp   = aabb.max.y - pMinY
+    const oyDown = pMaxY - aabb.min.y
     const oy = Math.min(oyUp, oyDown)
-
     const oz = Math.min(pMaxZ - aabb.min.z, aabb.max.z - pMinZ)
 
-    // Push out on the axis of minimum penetration
+    // Push out on axis of minimum penetration
     if (ox <= oy && ox <= oz) {
       const sign = px < (aabb.min.x + aabb.max.x) / 2 ? -1 : 1
       humanoid.position.x += sign * ox
-
     } else if (oy <= ox && oy <= oz) {
       if (oyUp <= oyDown) {
         // Feet just below box top — push up, land on top
@@ -161,11 +140,10 @@ export class Physics {
         this._state = STATE.GROUNDED
         return true
       } else {
-        // Head just above box floor — push down (head bump)
+        // Head bump — push down
         humanoid.position.y -= oyDown
         if (this.velocity.y > 0) this.velocity.y = 0
       }
-
     } else {
       const sign = pz < (aabb.min.z + aabb.max.z) / 2 ? -1 : 1
       humanoid.position.z += sign * oz
@@ -181,11 +159,7 @@ export class Physics {
 
     for (const { aabb } of obstacles) {
       const topY = aabb.max.y
-
-      // Hands within reach below the box's top face
       if (handsY < topY - LEDGE_REACH || handsY > topY) continue
-
-      // Horizontal centre within box footprint + margin
       if (px < aabb.min.x - LEDGE_H_MARGIN || px > aabb.max.x + LEDGE_H_MARGIN) continue
       if (pz < aabb.min.z - LEDGE_H_MARGIN || pz > aabb.max.z + LEDGE_H_MARGIN) continue
 

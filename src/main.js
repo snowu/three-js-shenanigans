@@ -6,6 +6,7 @@ import { CameraController } from './cameraController.js'
 import { createGround } from './ground.js'
 import { CourseManager } from './obstacles.js'
 import { Physics } from './physics.js'
+import { PLAYER_WIDTH, PLAYER_HEIGHT, SPAWN_POS } from './config.js'
 
 // Lights
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.4)
@@ -23,8 +24,7 @@ scene.add(ground)
 const course = new CourseManager('medium')
 
 const humanoid = createHumanoid()
-const spawn = course.getSpawnPosition()
-humanoid.position.set(spawn.x, spawn.y, spawn.z)
+humanoid.position.set(SPAWN_POS.x, SPAWN_POS.y, SPAWN_POS.z)
 scene.add(humanoid)
 
 // Controllers
@@ -33,8 +33,6 @@ const physics  = new Physics()
 const cameraController = new CameraController(camera, renderer.domElement, humanoid, scene)
 
 // Debug hitboxes — toggle with H
-const HITBOX_W = 0.4
-const HITBOX_H = 2.0
 
 function makeWireBox(w, h, d, color) {
   const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d))
@@ -48,7 +46,7 @@ function makeWireBox(w, h, d, color) {
 let obstacleHelpers = []
 let hitboxesVisible = false
 
-const playerHelper = makeWireBox(HITBOX_W, HITBOX_H, HITBOX_W, 0x00ff00)
+const playerHelper = makeWireBox(PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH, 0x00ff00)
 scene.add(playerHelper)
 
 function rebuildObstacleHelpers() {
@@ -96,7 +94,7 @@ function animate(timestamp) {
 
   playerHelper.position.set(
     humanoid.position.x,
-    humanoid.position.y + HITBOX_H / 2,
+    humanoid.position.y + PLAYER_HEIGHT / 2,
     humanoid.position.z
   )
 

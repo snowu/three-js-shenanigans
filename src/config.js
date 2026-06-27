@@ -1,0 +1,39 @@
+// Single source of truth for all physics and world constants.
+// Import from here — never redeclare these values in other files.
+
+// ── player physics ───────────────────────────────────────────────────────────
+export const GRAVITY       = 20    // m/s² downward acceleration
+export const JUMP_SPEED    = 8     // m/s initial upward velocity on jump
+export const MOVE_SPEED    = 15    // m/s horizontal speed
+export const COYOTE_TIME   = 0.12  // seconds after walking off edge where jump still works
+export const MAX_AIR_JUMPS = 1     // extra jumps allowed while airborne (double jump)
+
+// ── player dimensions ────────────────────────────────────────────────────────
+export const PLAYER_WIDTH  = 0.4   // AABB width and depth for collision
+export const PLAYER_HEIGHT = 2.0   // AABB height (feet to top of head)
+export const HAND_OFFSET_Y = 1.5   // y above feet where hands are (for ledge detection)
+export const LEDGE_REACH   = 0.4   // max distance below box top where hands can grab
+export const LEDGE_H_MARGIN = 0.3  // horizontal margin outside box footprint still counts
+
+// ── world ────────────────────────────────────────────────────────────────────
+export const GROUND_Y       = 0    // y of the ground/death plane
+export const SPAWN_POS      = { x: 0, y: 1, z: -3 }
+
+// ── corridor ─────────────────────────────────────────────────────────────────
+export const CORRIDOR_WIDTH  = 14
+export const CORRIDOR_HEIGHT = 12
+export const SEGMENT_DEPTH   = 40
+export const WALL_THICKNESS  = 0.5
+
+// ── fog / generation ─────────────────────────────────────────────────────────
+export const FOG_START          = 60
+export const FOG_END            = 100
+export const GENERATE_TIME_AHEAD = 2
+
+// ── derived (computed once at import time) ───────────────────────────────────
+export const SINGLE_JUMP_HEIGHT = (JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY)
+export const SINGLE_JUMP_TIME   = (2 * JUMP_SPEED) / GRAVITY
+export const DOUBLE_JUMP_HEIGHT = SINGLE_JUMP_HEIGHT * 2
+export const DOUBLE_JUMP_TIME   = SINGLE_JUMP_TIME * 2
+export const MAX_H_RANGE_SINGLE = MOVE_SPEED * SINGLE_JUMP_TIME
+export const MAX_H_RANGE_DOUBLE = MOVE_SPEED * DOUBLE_JUMP_TIME

@@ -1,8 +1,9 @@
 import * as THREE from 'three'
+import { FOG_START, FOG_END } from './config.js'
 
 export const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x111111)
-scene.fog = new THREE.Fog(0x111111, 60, 100)
+scene.fog = new THREE.Fog(0x111111, FOG_START, FOG_END)
 
 export const camera = new THREE.PerspectiveCamera(
   75,
