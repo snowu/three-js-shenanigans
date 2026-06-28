@@ -10,6 +10,7 @@ import { updatePlatformMaterials } from './platformStyles.js'
 import { updateBillboardMaterials } from './billboardStyles.js'
 import { Physics } from './physics.js'
 import { HumanoidAnimator } from './humanoidAnimator.js'
+import { makeWireBox, createPlayerHitboxHelpers, updatePlayerHitboxPositions, createObstacleHitboxHelper } from './hitboxes.js'
 import { createDebugMenu } from './debugMenu.js'
 import config from './config.js'
 import { isMobile } from './mobile.js'
@@ -130,15 +131,6 @@ physics.onGroundHit = () => {
 
 // Debug hitboxes — toggle with H
 
-function makeWireBox(w, h, d, color) {
-  const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d))
-  const mat = new THREE.LineBasicMaterial({ color, depthTest: false })
-  const mesh = new THREE.LineSegments(geo, mat)
-  mesh.renderOrder = 999
-  mesh.visible = false
-  return mesh
-}
-
 let obstacleHelpers = []
 let ledgeHelpers = []
 let seamHelpers = []
@@ -147,9 +139,9 @@ let hitboxesVisible = false
 let kickHelper = null
 let _prevPW = config.PLAYER_WIDTH, _prevPH = config.PLAYER_HEIGHT
 
-const upperH = config.PLAYER_HEIGHT - config.KICK_HIP_Y
-let upperHelper = makeWireBox(config.PLAYER_WIDTH, upperH, config.PLAYER_WIDTH, 0x00ff00)
-let lowerHelper = makeWireBox(config.PLAYER_WIDTH, config.KICK_HIP_Y, config.PLAYER_WIDTH, 0x44ff44)
+let playerHitboxHelpers = createPlayerHitboxHelpers()
+let upperHelper = playerHitboxHelpers.upper
+let lowerHelper = playerHitboxHelpers.lower
 scene.add(upperHelper)
 scene.add(lowerHelper)
 
@@ -159,9 +151,9 @@ function rebuildPlayerHelper() {
   scene.remove(lowerHelper)
   upperHelper.geometry.dispose()
   lowerHelper.geometry.dispose()
-  const uH = config.PLAYER_HEIGHT - config.KICK_HIP_Y
-  upperHelper = makeWireBox(config.PLAYER_WIDTH, uH, config.PLAYER_WIDTH, 0x00ff00)
-  lowerHelper = makeWireBox(config.PLAYER_WIDTH, config.KICK_HIP_Y, config.PLAYER_WIDTH, 0x44ff44)
+  playerHitboxHelpers = createPlayerHitboxHelpers()
+  upperHelper = playerHitboxHelpers.upper
+  lowerHelper = playerHitboxHelpers.lower
   upperHelper.visible = vis
   lowerHelper.visible = vis
   scene.add(upperHelper)
@@ -176,23 +168,13 @@ function rebuildObstacleHelpers() {
   seamHelpers.forEach(h => scene.remove(h))
   const allObs = courses.flatMap(c => c.allObstacles)
   obstacleHelpers = allObs.map(({ aabb }) => {
-    const size   = new THREE.Vector3()
-    const center = new THREE.Vector3()
-    aabb.getSize(size)
-    aabb.getCenter(center)
-    const h = makeWireBox(size.x, size.y, size.z, 0xffffff)
-    h.position.copy(center)
+    const h = createObstacleHitboxHelper(aabb, 0xffffff)
     h.visible = hitboxesVisible
     scene.add(h)
     return h
   })
   ledgeHelpers = allObs.filter(o => o.ledgeAABB).map(({ ledgeAABB }) => {
-    const size   = new THREE.Vector3()
-    const center = new THREE.Vector3()
-    ledgeAABB.getSize(size)
-    ledgeAABB.getCenter(center)
-    const h = makeWireBox(size.x, size.y, size.z, 0x00ffff)
-    h.position.copy(center)
+    const h = createObstacleHitboxHelper(ledgeAABB, 0x00ffff)
     h.visible = hitboxesVisible
     scene.add(h)
     return h
@@ -286,17 +268,7 @@ function animate(timestamp) {
   animator.update(delta)
   cameraController.update()
 
-  const uH = config.PLAYER_HEIGHT - config.KICK_HIP_Y
-  upperHelper.position.set(
-    humanoid.position.x,
-    humanoid.position.y + config.KICK_HIP_Y + uH / 2,
-    humanoid.position.z
-  )
-  lowerHelper.position.set(
-    humanoid.position.x,
-    humanoid.position.y + config.KICK_HIP_Y / 2,
-    humanoid.position.z
-  )
+  updatePlayerHitboxPositions(playerHitboxHelpers, humanoid.position)
   lowerHelper.visible = hitboxesVisible && !physics.legsExtended
 
   // Show kick hitbox when legs extended

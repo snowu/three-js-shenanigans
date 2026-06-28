@@ -1,6 +1,7 @@
 import config from './config.js'
 import { createPlatformMeshes } from './platformStyles.js'
 import { createBillboardMeshes } from './billboardStyles.js'
+import { buildPlatformAABBs } from './hitboxes.js'
 import * as THREE from 'three'
 
 function rand(min, max) {
@@ -527,10 +528,7 @@ export class CourseManager {
 
       for (const m of result.meshes) meshes.push(m)
 
-      const aabb = new THREE.Box3().setFromObject(result.mainMesh)
-      const ext = config.LEDGE_GRAB_EXTEND
-      const ledgeAABB = aabb.clone()
-      ledgeAABB.max.z += ext
+      const { aabb, ledgeAABB } = buildPlatformAABBs(result.mainMesh)
       obstacles.push({ mesh: result.mainMesh, aabb, ledgeAABB, isSpawn: !!b.isSpawn })
     })
 
