@@ -41,8 +41,9 @@ const VOLCANIC_VERT = `
   void main(){
     vNormal = normalize(normalMatrix * normal);
     vec3 pos = position;
-    float n = snoise(pos.xz * 1.5) * 0.03;
-    pos += normal * n;
+    float isTop = step(0.49, normal.y);
+    float n = snoise(pos.xz * 1.5) * 0.02 * isTop;
+    pos.y += n;
     vWorldPos = (modelMatrix * vec4(pos,1.0)).xyz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos,1.0);
   }
@@ -82,7 +83,7 @@ const volcanicMat = new THREE.ShaderMaterial({
   fragmentShader: VOLCANIC_FRAG,
 })
 // Low-subdivision box for volcanic displacement — shared, scaled per platform
-const volcanicBoxGeo = new THREE.BoxGeometry(1, 1, 1, 8, 2, 8)
+const volcanicBoxGeo = new THREE.BoxGeometry(1, 1, 1, 12, 4, 12)
 
 const volcanicDripMat = new THREE.MeshStandardMaterial({
   color: 0xff4400, emissive: 0xff3300, emissiveIntensity: 4,

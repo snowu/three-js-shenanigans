@@ -17,8 +17,22 @@ function clamp(v, lo, hi) {
 
 function nudgeAwayFromAll(plat, allPlatforms, neighborPlatforms, halfW) {
   const checkList = neighborPlatforms ? allPlatforms.concat(neighborPlatforms) : allPlatforms
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 5; pass++) {
     for (const other of checkList) {
+      if (other === plat) continue
+      // Direct AABB overlap check — resolve overlap completely
+      const overlapX = (plat.w / 2 + other.w / 2) - Math.abs(plat.x - other.x)
+      const overlapZ = (plat.d / 2 + other.d / 2) - Math.abs(plat.z - other.z)
+      const overlapY = (plat.h / 2 + other.h / 2) - Math.abs(plat.y - other.y)
+      if (overlapX > 0 && overlapZ > 0 && overlapY > 0) {
+        // Push apart along Z (primary movement axis) + add spacing
+        const pushZ = overlapZ + config.MIN_PLATFORM_SPACING * 0.5
+        plat.z = Math.round((plat.z - pushZ) * 10) / 10
+        const lateralDir = plat.x >= other.x ? 1 : -1
+        plat.x = Math.round(clamp(plat.x + lateralDir * overlapX * 0.5, -halfW, halfW) * 10) / 10
+        continue
+      }
+      // Spacing check for non-overlapping platforms
       const gapX = Math.max(0, Math.abs(plat.x - other.x) - plat.w / 2 - other.w / 2)
       const gapZ = Math.max(0, Math.abs(plat.z - other.z) - plat.d / 2 - other.d / 2)
       const gapY = Math.max(0, Math.abs(plat.y - other.y) - plat.h / 2 - other.h / 2)
@@ -169,6 +183,44 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
   return { platforms, billboards, lastPlatform: prev, platformCounter: platIndex, lastBillboardZ: lastBillboardZ }
 }
+
+export function validateSegment(platforms, billboards) {
+  const issues = []
+
+  for (let i = 0; i < platforms.length; i++) {
+    const a = platforms[i]
+    for (let j = i + 1; j < platforms.length; j++) {
+      const b = platforms[j]
+      const overlapX = (a.w / 2 + b.w / 2) - Math.abs(a.x - b.x)
+      const overlapZ = (a.d / 2 + b.d / 2) - Math.abs(a.z - b.z)
+      const overlapY = (a.h / 2 + b.h / 2) - Math.abs(a.y - b.y)
+      if (overlapX > 0 && overlapZ > 0 && overlapY > 0) {
+        issues.push({ type: 'overlap', platIndices: [i, j], msg: `OVERLAP plat ${i} & ${j} (${overlapX.toFixed(1)}x ${overlapZ.toFixed(1)}z ${overlapY.toFixed(1)}y)` })
+      }
+    }
+  }
+
+  for (let i = 0; i < platforms.length; i++) {
+    const p = platforms[i]
+    for (let j = 0; j < billboards.length; j++) {
+      const bb = billboards[j]
+      const bbW = config.BILLBOARD_WIDTH
+      const bbH = config.BILLBOARD_HEIGHT
+      const bbD = config.BILLBOARD_DEPTH
+      const bbY = bb.y + bbH / 2
+      const overlapX = (p.w / 2 + bbW / 2) - Math.abs(p.x - bb.x)
+      const overlapZ = (p.d / 2 + bbD / 2) - Math.abs(p.z - bb.z)
+      const overlapY = (p.h / 2 + bbH / 2) - Math.abs(p.y - bbY)
+      if (overlapX > 0 && overlapZ > 0 && overlapY > 0) {
+        issues.push({ type: 'clip', platIndices: [i], msg: `CLIP plat ${i} into billboard ${j}` })
+      }
+    }
+  }
+
+  return issues
+}
+
+export { generateSegmentPlatforms }
 
 export class BillboardTestCourse {
   constructor(xOffset = 0, billboardSpacing = 4, zSpacing = 12) {
@@ -359,7 +411,13 @@ export class CourseManager {
       obstacles.push({ mesh: result.mainMesh, aabb, isBillboard: true, wallNormalX: -bb.side })
     }
 
-    return { index, startZ, platforms, meshes, obstacles }
+    const issues = this._validateSegment(index, platforms, billboards)
+
+    return { index, startZ, platforms, meshes, obstacles, issues }
+  }
+
+  _validateSegment(segIndex, platforms, billboards) {
+    return validateSegment(platforms, billboards)
   }
 
   segmentBoundaries() {

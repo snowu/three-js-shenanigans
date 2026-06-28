@@ -142,6 +142,7 @@ function makeWireBox(w, h, d, color) {
 let obstacleHelpers = []
 let ledgeHelpers = []
 let seamHelpers = []
+let issueHelpers = []
 let hitboxesVisible = false
 let kickHelper = null
 let _prevPW = config.PLAYER_WIDTH, _prevPH = config.PLAYER_HEIGHT
@@ -217,6 +218,29 @@ function rebuildObstacleHelpers() {
       seamHelpers.push(seam)
     }
   }
+  // Issue markers — red for overlap/clip, yellow for unreachable
+  issueHelpers.forEach(h => scene.remove(h))
+  issueHelpers = []
+  for (const c of courses) {
+    if (!c._segments) continue
+    for (const seg of c._segments) {
+      if (!seg.issues || seg.issues.length === 0) continue
+      const flagged = new Set()
+      for (const issue of seg.issues) {
+        const color = issue.type === 'unreachable' ? 0xffff00 : 0xff0000
+        for (const idx of issue.platIndices) {
+          if (idx >= seg.platforms.length || flagged.has(`${idx}-${color}`)) continue
+          flagged.add(`${idx}-${color}`)
+          const p = seg.platforms[idx]
+          const marker = makeWireBox(p.w + 0.3, p.h + 0.3, p.d + 0.3, color)
+          marker.position.set(p.x, p.y, p.z)
+          marker.visible = hitboxesVisible
+          scene.add(marker)
+          issueHelpers.push(marker)
+        }
+      }
+    }
+  }
 }
 
 window.addEventListener('keydown', (e) => {
@@ -225,6 +249,7 @@ window.addEventListener('keydown', (e) => {
     obstacleHelpers.forEach(h => { h.visible = hitboxesVisible })
     ledgeHelpers.forEach(h => { h.visible = hitboxesVisible })
     seamHelpers.forEach(h => { h.visible = hitboxesVisible })
+    issueHelpers.forEach(h => { h.visible = hitboxesVisible })
     upperHelper.visible = hitboxesVisible
     lowerHelper.visible = hitboxesVisible
   }
