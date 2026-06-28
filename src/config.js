@@ -155,10 +155,10 @@ const config = {
 
   // ── distant mountains ─────────────────────────────────────────────────────
   MOUNTAIN_LAYER_COUNT:    3,
-  MOUNTAIN_RADIUS_INNER:   80,
+  MOUNTAIN_RADIUS_INNER:   400,
   MOUNTAIN_RADIUS_STEP:    30,
-  MOUNTAIN_HEIGHT_MIN:     50,
-  MOUNTAIN_HEIGHT_MAX:     80,
+  MOUNTAIN_HEIGHT_MIN:     80,
+  MOUNTAIN_HEIGHT_MAX:     140,
   MOUNTAIN_SEGMENTS:       128,
 
   // ── spawn platform ────────────────────────────────────────────────────────

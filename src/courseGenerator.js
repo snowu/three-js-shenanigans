@@ -1,6 +1,6 @@
 import config from './config.js'
 import { createPlatformMeshes } from './platformStyles.js'
-import { createBillboardMeshes, BILLBOARD_STYLE_COUNT, isSurveillanceStyle, registerSurveillanceBillboard } from './billboardStyles.js'
+import { createBillboardMeshes, BILLBOARD_STYLE_COUNT, isProductAdStyle, registerProductAdMaterial } from './billboardStyles.js'
 import { buildPlatformAABBs } from './hitboxes.js'
 import * as THREE from 'three'
 
@@ -541,8 +541,8 @@ export class CourseManager {
       if (bb.side > 0) aabb.min.x -= config.BILLBOARD_HITBOX_PAD
       else aabb.max.x += config.BILLBOARD_HITBOX_PAD
       obstacles.push({ mesh: result.mainMesh, aabb, isBillboard: true, wallNormalX: -bb.side })
-      if (isSurveillanceStyle(styleIdx)) {
-        registerSurveillanceBillboard(result.mainMesh, new THREE.Vector3(bb.x, bb.y + config.BILLBOARD_HEIGHT / 2, bb.z))
+      if (isProductAdStyle(styleIdx)) {
+        registerProductAdMaterial(result.mainMesh.material)
       }
     }
 

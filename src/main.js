@@ -7,7 +7,7 @@ import { createGround, updateGround } from './ground.js'
 import { createRocks, updateRocks, getRockHazards, createMountains, updateMountains } from './environment.js'
 import { CourseManager, BillboardTestCourse } from './obstacles.js'
 import { updatePlatformMaterials } from './platformStyles.js'
-import { updateBillboardMaterials, initSurveillance, updateSurveillanceBillboards } from './billboardStyles.js'
+import { updateBillboardMaterials, initSurveillance, createSkyScreens, updateSkyScreens } from './billboardStyles.js'
 import { Physics } from './physics.js'
 import { HumanoidAnimator } from './humanoidAnimator.js'
 import { makeWireBox, createPlayerHitboxHelpers, updatePlayerHitboxPositions, createObstacleHitboxHelper } from './hitboxes.js'
@@ -34,7 +34,8 @@ createRocks(scene)
 createMountains(scene)
 
 // Surveillance billboard system
-initSurveillance(renderer, scene, camera)
+initSurveillance(renderer, scene)
+createSkyScreens(scene)
 
 // Course manager — generates corridor + platforms on the fly
 const course = new CourseManager('medium')
@@ -308,7 +309,7 @@ function animate(timestamp) {
   updateMountains(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   updatePlatformMaterials(timestamp * 0.001)
   updateBillboardMaterials(timestamp * 0.001, score, runTime)
-  updateSurveillanceBillboards(humanoid.position, score, runTime)
+  updateSkyScreens(timestamp * 0.001, humanoid.position, score, runTime)
 
   // Rock hazard collision
   const halfW = config.PLAYER_WIDTH / 2

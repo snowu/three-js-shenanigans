@@ -191,111 +191,369 @@ export function getRockHazards() {
   return rocks.filter(r => r.active && r.landed && r.isHazard)
 }
 
-// ── Distant Mountains ───────────────────────────────────────────────────────
+// ── Neon Colosseum ──────────────────────────────────────────────────────────
 
-const MOUNTAIN_VERTEX = `
-  attribute float heightFrac;
-  varying float vHeightFrac;
+const colosseumGroup = new THREE.Group()
+let crowdInstances = null
+let crowdCount = 0
+let searchlightPivots = []
 
-  void main() {
-    vHeightFrac = heightFrac;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const MOUNTAIN_FRAGMENT = `
-  uniform vec3 baseColor;
-  varying float vHeightFrac;
-
-  void main() {
-    float heightNorm = clamp(vHeightFrac, 0.0, 1.0);
-    vec3 color = baseColor * (0.3 + 0.7 * (1.0 - heightNorm));
-    float alpha = smoothstep(0.0, 0.02, heightNorm);
-    gl_FragColor = vec4(color, alpha);
-  }
-`
-
-const mountainLayers = []
+const TIER_COUNT = 8
+const PILLAR_COUNT = 32
+const SPECTATORS_PER_TIER = 200
+const SEARCHLIGHT_COUNT = 6
 
 export function createMountains(scene) {
-  const baseColors = [
-    new THREE.Vector3(0.08, 0.03, 0.015),
-    new THREE.Vector3(0.1, 0.04, 0.02),
-    new THREE.Vector3(0.12, 0.05, 0.025),
-  ]
+  const baseRadius = config.MOUNTAIN_RADIUS_INNER
+  const totalHeight = config.MOUNTAIN_HEIGHT_MAX
 
-  for (let i = 0; i < config.MOUNTAIN_LAYER_COUNT; i++) {
-    const radius = config.MOUNTAIN_RADIUS_INNER + i * config.MOUNTAIN_RADIUS_STEP
-    const segments = config.MOUNTAIN_SEGMENTS
-    const heightScale = config.MOUNTAIN_HEIGHT_MIN + (i / (config.MOUNTAIN_LAYER_COUNT - 1)) * (config.MOUNTAIN_HEIGHT_MAX - config.MOUNTAIN_HEIGHT_MIN)
+  const tierHeight = totalHeight / TIER_COUNT
+  const rakePerTier = 4
 
-    const geo = new THREE.CylinderGeometry(radius, radius * 1.05, heightScale, segments, 24, true)
-    const positions = geo.attributes.position
-    const heightFracArr = new Float32Array(positions.count)
+  // ── Structural materials ────────────────────────────────────────────────
+  const structureMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0a18,
+    roughness: 0.7,
+    metalness: 0.9,
+  })
 
-    for (let v = 0; v < positions.count; v++) {
-      const x = positions.getX(v)
-      const y = positions.getY(v)
-      const z = positions.getZ(v)
+  const tierFaceMat = new THREE.MeshStandardMaterial({
+    color: 0x0c0c20,
+    roughness: 0.8,
+    metalness: 0.6,
+  })
 
-      const angle = Math.atan2(x, z)
-      const normalizedY = (y + heightScale / 2) / heightScale
+  const seatMat = new THREE.MeshStandardMaterial({
+    color: 0x151530,
+    roughness: 0.9,
+    metalness: 0.3,
+  })
 
-      if (normalizedY < 0.01) {
-        positions.setY(v, -2)
-        heightFracArr[v] = 0
-        continue
-      }
+  const neonColors = [0x0066ff, 0xff0066, 0x7700ff, 0x00ffaa, 0xff4400, 0x00aaff, 0xff00ff, 0xffaa00]
 
-      let mountainProfile = 0
-      mountainProfile += Math.sin(angle * 3 + i * 2) * 0.3
-      mountainProfile += Math.sin(angle * 7 + i * 5) * 0.15
-      mountainProfile += Math.sin(angle * 13 + i * 3) * 0.08
-      mountainProfile += Math.sin(angle * 19 + i * 7) * 0.04
-      mountainProfile += Math.sin(angle * 31 + i * 11) * 0.03
-      mountainProfile = (mountainProfile + 1) * 0.5
+  // ── Tiered seating — concentric stepped rings ───────────────────────────
+  for (let t = 0; t < TIER_COUNT; t++) {
+    const innerR = baseRadius + t * rakePerTier
+    const outerR = innerR + rakePerTier - 0.5
+    const y = t * tierHeight
 
-      const peakVariation = Math.pow(Math.sin(angle * 5 + i * 1.7) * 0.5 + 0.5, 1.5)
-      const peakHeight = heightScale * (0.3 + 0.7 * mountainProfile) * (0.5 + 0.5 * peakVariation)
+    // Tier floor — flat ring
+    const floorGeo = new THREE.RingGeometry(innerR, outerR, 64)
+    const floor = new THREE.Mesh(floorGeo, seatMat)
+    floor.rotation.x = -Math.PI / 2
+    floor.position.y = y
+    colosseumGroup.add(floor)
 
-      const taper = Math.pow(normalizedY, 0.6)
-      const finalHeight = -2 + normalizedY * peakHeight
+    // Tier face wall — vertical cylinder band (the riser)
+    const riserGeo = new THREE.CylinderGeometry(innerR, innerR, tierHeight, 64, 1, true)
+    const riser = new THREE.Mesh(riserGeo, tierFaceMat)
+    riser.position.y = y - tierHeight / 2
+    colosseumGroup.add(riser)
 
-      const radialShrink = 1.0 - taper * 0.15
-      positions.setX(v, x * radialShrink)
-      positions.setZ(v, z * radialShrink)
-      positions.setY(v, finalHeight)
-
-      heightFracArr[v] = normalizedY
-    }
-
-    positions.needsUpdate = true
-    geo.setAttribute('heightFrac', new THREE.BufferAttribute(heightFracArr, 1))
-    geo.computeVertexNormals()
-
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        baseColor: { value: baseColors[i] },
-      },
-      vertexShader: MOUNTAIN_VERTEX,
-      fragmentShader: MOUNTAIN_FRAGMENT,
-      side: THREE.BackSide,
+    // Neon edge strip at front of each tier
+    const neonGeo = new THREE.TorusGeometry(innerR + 0.1, 0.12, 6, 64)
+    const neonMat = new THREE.MeshBasicMaterial({
+      color: neonColors[t % neonColors.length],
       transparent: true,
-      depthWrite: false,
-      fog: false,
+      opacity: 0.8,
     })
-
-    const mesh = new THREE.Mesh(geo, mat)
-    mesh.renderOrder = -10 + i
-    scene.add(mesh)
-    mountainLayers.push({ mesh, mat })
+    const neonRing = new THREE.Mesh(neonGeo, neonMat)
+    neonRing.rotation.x = Math.PI / 2
+    neonRing.position.y = y + 0.05
+    colosseumGroup.add(neonRing)
   }
+
+  // ── Back wall — tall cylinder behind top tier ───────────────────────────
+  const backWallR = baseRadius + TIER_COUNT * rakePerTier + 2
+  const backWallH = totalHeight * 0.6
+  const backWallGeo = new THREE.CylinderGeometry(backWallR, backWallR * 1.01, backWallH, 64, 1, true)
+  const backWall = new THREE.Mesh(backWallGeo, structureMat)
+  backWall.position.y = TIER_COUNT * tierHeight + backWallH / 2
+  colosseumGroup.add(backWall)
+
+  // Neon accent rings on back wall
+  for (let i = 0; i < 3; i++) {
+    const ringY = TIER_COUNT * tierHeight + backWallH * (0.25 + i * 0.25)
+    const ringGeo = new THREE.TorusGeometry(backWallR - 0.5, 0.15, 6, 64)
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: neonColors[(TIER_COUNT + i) % neonColors.length],
+      transparent: true,
+      opacity: 0.5,
+    })
+    const ring = new THREE.Mesh(ringGeo, ringMat)
+    ring.rotation.x = Math.PI / 2
+    ring.position.y = ringY
+    colosseumGroup.add(ring)
+  }
+
+  // ── Arch pillars — thick structural columns with neon edges ─────────────
+  const pillarGeo = new THREE.CylinderGeometry(1.2, 1.5, totalHeight + backWallH * 0.8, 8)
+  const pillarMat = new THREE.MeshStandardMaterial({
+    color: 0x0e0e25,
+    roughness: 0.5,
+    metalness: 0.95,
+  })
+
+  for (let i = 0; i < PILLAR_COUNT; i++) {
+    const angle = (i / PILLAR_COUNT) * Math.PI * 2
+    const r = baseRadius - 1.5
+    const x = Math.cos(angle) * r
+    const z = Math.sin(angle) * r
+    const pillarH = totalHeight + backWallH * 0.8
+
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat)
+    pillar.position.set(x, pillarH / 2 - 2, z)
+    colosseumGroup.add(pillar)
+
+    // Neon strip running up each pillar
+    const stripGeo = new THREE.BoxGeometry(0.08, pillarH, 0.08)
+    const stripColor = neonColors[i % neonColors.length]
+    const stripMat = new THREE.MeshBasicMaterial({
+      color: stripColor,
+      transparent: true,
+      opacity: 0.7,
+    })
+    const strip = new THREE.Mesh(stripGeo, stripMat)
+    strip.position.set(x + Math.cos(angle) * 1.3, pillarH / 2 - 2, z + Math.sin(angle) * 1.3)
+    colosseumGroup.add(strip)
+
+    // Arch between pillars — curved beam connecting tops
+    if (i % 2 === 0) {
+      const nextAngle = ((i + 1) / PILLAR_COUNT) * Math.PI * 2
+      const midAngle = (angle + nextAngle) / 2
+      const archR = r
+      const archX = Math.cos(midAngle) * archR
+      const archZ = Math.sin(midAngle) * archR
+      const archSpan = 2 * archR * Math.sin((nextAngle - angle) / 2)
+
+      const archGeo = new THREE.BoxGeometry(archSpan, 1.5, 2)
+      const arch = new THREE.Mesh(archGeo, structureMat)
+      arch.position.set(archX, pillarH - 3, archZ)
+      arch.rotation.y = -midAngle + Math.PI / 2
+      colosseumGroup.add(arch)
+    }
+  }
+
+  // ── VIP boxes — larger enclosed sections every few pillars ──────────────
+  const vipCount = 8
+  for (let i = 0; i < vipCount; i++) {
+    const angle = (i / vipCount) * Math.PI * 2
+    const r = baseRadius + 2
+    const vipW = 8
+    const vipH = tierHeight * 2
+    const vipD = rakePerTier * 1.5
+
+    const vipGeo = new THREE.BoxGeometry(vipW, vipH, vipD)
+    const vipMat = new THREE.MeshStandardMaterial({
+      color: 0x0a0a1a,
+      roughness: 0.6,
+      metalness: 0.8,
+    })
+    const vip = new THREE.Mesh(vipGeo, vipMat)
+    const vipY = tierHeight * 3 + vipH / 2
+    vip.position.set(Math.cos(angle) * r, vipY, Math.sin(angle) * r)
+    vip.rotation.y = -angle + Math.PI / 2
+    colosseumGroup.add(vip)
+
+    // VIP neon frame
+    const edges = new THREE.EdgesGeometry(vipGeo)
+    const edgeLine = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+      color: neonColors[i % neonColors.length],
+      transparent: true,
+      opacity: 0.9,
+    }))
+    edgeLine.position.copy(vip.position)
+    edgeLine.rotation.copy(vip.rotation)
+    colosseumGroup.add(edgeLine)
+
+    // VIP window glow — emissive face
+    const windowGeo = new THREE.PlaneGeometry(vipW * 0.8, vipH * 0.6)
+    const windowMat = new THREE.MeshBasicMaterial({
+      color: neonColors[i % neonColors.length],
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide,
+    })
+    const window = new THREE.Mesh(windowGeo, windowMat)
+    window.position.set(
+      Math.cos(angle) * (r - vipD / 2 + 0.1),
+      vipY,
+      Math.sin(angle) * (r - vipD / 2 + 0.1)
+    )
+    window.rotation.y = -angle + Math.PI / 2
+    colosseumGroup.add(window)
+  }
+
+  // ── Instanced spectators — small capsule shapes in the stands ──────────
+  crowdCount = TIER_COUNT * SPECTATORS_PER_TIER
+  const spectatorGeo = new THREE.CapsuleGeometry(0.15, 0.4, 2, 4)
+  const spectatorMat = new THREE.MeshStandardMaterial({
+    roughness: 0.9,
+    metalness: 0.1,
+  })
+
+  crowdInstances = new THREE.InstancedMesh(spectatorGeo, spectatorMat, crowdCount)
+  crowdInstances.instanceColor = new THREE.InstancedBufferAttribute(
+    new Float32Array(crowdCount * 3), 3
+  )
+
+  const dummy = new THREE.Object3D()
+  const color = new THREE.Color()
+  let idx = 0
+
+  for (let t = 0; t < TIER_COUNT; t++) {
+    const tierR = baseRadius + t * rakePerTier + rakePerTier * 0.5
+    const tierY = t * tierHeight + 0.5
+
+    for (let s = 0; s < SPECTATORS_PER_TIER; s++) {
+      const angle = (s / SPECTATORS_PER_TIER) * Math.PI * 2 + (Math.random() - 0.5) * 0.02
+      const rJitter = (Math.random() - 0.5) * (rakePerTier * 0.6)
+
+      dummy.position.set(
+        Math.cos(angle) * (tierR + rJitter),
+        tierY + Math.random() * 0.3,
+        Math.sin(angle) * (tierR + rJitter)
+      )
+      dummy.scale.setScalar(0.8 + Math.random() * 0.5)
+      dummy.rotation.y = -angle + Math.PI + (Math.random() - 0.5) * 0.3
+      dummy.updateMatrix()
+      crowdInstances.setMatrixAt(idx, dummy.matrix)
+
+      // Random crowd colors — clothes
+      const hue = Math.random()
+      const sat = 0.3 + Math.random() * 0.5
+      const light = 0.08 + Math.random() * 0.12
+      color.setHSL(hue, sat, light)
+      crowdInstances.setColorAt(idx, color)
+      idx++
+    }
+  }
+
+  crowdInstances.instanceMatrix.needsUpdate = true
+  crowdInstances.instanceColor.needsUpdate = true
+  colosseumGroup.add(crowdInstances)
+
+  // ── Searchlights — cone geometry from rim ──────────────────────────────
+  const beamGeo = new THREE.ConeGeometry(8, 60, 16, 1, true)
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.04,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+
+  for (let i = 0; i < SEARCHLIGHT_COUNT; i++) {
+    const angle = (i / SEARCHLIGHT_COUNT) * Math.PI * 2
+    const r = backWallR - 2
+    const pivot = new THREE.Group()
+    pivot.position.set(
+      Math.cos(angle) * r,
+      TIER_COUNT * tierHeight + backWallH * 0.8,
+      Math.sin(angle) * r
+    )
+
+    const beam = new THREE.Mesh(beamGeo, beamMat)
+    beam.rotation.x = Math.PI * 0.75
+    beam.position.y = -25
+    pivot.add(beam)
+
+    // Light source glow at searchlight origin
+    const bulbGeo = new THREE.SphereGeometry(0.5, 8, 8)
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffffcc })
+    const bulb = new THREE.Mesh(bulbGeo, bulbMat)
+    pivot.add(bulb)
+
+    colosseumGroup.add(pivot)
+    searchlightPivots.push({ pivot, baseAngle: angle, speed: 0.3 + Math.random() * 0.4 })
+  }
+
+  // ── Top crown — ornamental ring of spikes ──────────────────────────────
+  const crownR = backWallR + 1
+  const crownY = TIER_COUNT * tierHeight + backWallH
+  const spikeCount = 48
+  const spikeGeo = new THREE.ConeGeometry(0.6, 6, 4)
+  const spikeMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0a20,
+    roughness: 0.4,
+    metalness: 0.95,
+    emissive: 0x110033,
+    emissiveIntensity: 0.3,
+  })
+
+  for (let i = 0; i < spikeCount; i++) {
+    const angle = (i / spikeCount) * Math.PI * 2
+    const spike = new THREE.Mesh(spikeGeo, spikeMat)
+    spike.position.set(Math.cos(angle) * crownR, crownY + 3, Math.sin(angle) * crownR)
+    colosseumGroup.add(spike)
+  }
+
+  // Top crown neon ring
+  const crownRingGeo = new THREE.TorusGeometry(crownR, 0.25, 6, 64)
+  const crownRingMat = new THREE.MeshBasicMaterial({
+    color: 0xff0066,
+    transparent: true,
+    opacity: 0.7,
+  })
+  const crownRing = new THREE.Mesh(crownRingGeo, crownRingMat)
+  crownRing.rotation.x = Math.PI / 2
+  crownRing.position.y = crownY
+  colosseumGroup.add(crownRing)
+
+  // ── Floor-level lava glow ring ─────────────────────────────────────────
+  const lavaGlowGeo = new THREE.RingGeometry(baseRadius - 3, baseRadius + 2, 64)
+  const lavaGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xff4400,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+  const lavaGlow = new THREE.Mesh(lavaGlowGeo, lavaGlowMat)
+  lavaGlow.rotation.x = -Math.PI / 2
+  lavaGlow.position.y = 0.1
+  colosseumGroup.add(lavaGlow)
+
+  scene.add(colosseumGroup)
 }
 
 export function updateMountains(time, playerX, playerZ) {
-  for (let i = 0; i < mountainLayers.length; i++) {
-    const layer = mountainLayers[i]
-    const parallax = 1.0 - i * 0.1
-    layer.mesh.position.set(playerX, 0, playerZ)
+  colosseumGroup.position.set(playerX, 0, playerZ)
+
+  // Animate searchlights
+  for (const sl of searchlightPivots) {
+    const swing = Math.sin(time * sl.speed) * 0.4
+    sl.pivot.rotation.y = swing
+    sl.pivot.rotation.z = Math.sin(time * sl.speed * 0.7 + sl.baseAngle) * 0.15
+  }
+
+  // Animate crowd — wave effect via instance matrices
+  if (crowdInstances) {
+    const dummy = new THREE.Object3D()
+    const matrix = new THREE.Matrix4()
+    const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
+    const scale = new THREE.Vector3()
+
+    for (let i = 0; i < crowdCount; i++) {
+      crowdInstances.getMatrixAt(i, matrix)
+      matrix.decompose(pos, quat, scale)
+
+      // Stadium wave — sinusoidal Y offset based on angle and time
+      const angle = Math.atan2(pos.z, pos.x)
+      const wavePhase = angle * 2 + time * 2.5
+      const waveHeight = Math.max(0, Math.sin(wavePhase)) * 0.6
+
+      // Arms-up effect by scaling Y when in wave
+      const scaleBoost = 1.0 + waveHeight * 0.3
+      dummy.position.copy(pos)
+      dummy.position.y = pos.y + waveHeight
+      dummy.quaternion.copy(quat)
+      dummy.scale.set(scale.x, scale.y * scaleBoost, scale.z)
+      dummy.updateMatrix()
+
+      crowdInstances.setMatrixAt(i, dummy.matrix)
+    }
+    crowdInstances.instanceMatrix.needsUpdate = true
   }
 }
