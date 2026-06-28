@@ -7,6 +7,7 @@ const STATE = {
   HANGING:     'hanging',
   PULLING_UP:  'pullingUp',
   WALLRUNNING: 'wallrunning',
+  GRINDING:    'grinding',
 }
 
 export class Physics {
@@ -38,6 +39,13 @@ export class Physics {
     this._pullUpTargetY = 0
     this._pullUpTargetZ = 0
     this._speedFloor = config.MOVE_SPEED_MIN
+    this._momentum = config.MOMENTUM_MIN
+    this._chainTimer = 0
+    this._chainCombo = 0
+    this._lastSpecialState = null
+    this.onChain = null
+    this.onGrind = null
+    this._wallrunTimer = 0
   }
 
   get state() { return this._state }
@@ -45,6 +53,9 @@ export class Physics {
   get horizontalSpeed() {
     return Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2)
   }
+
+  get momentum() { return this._momentum }
+  get chainCombo() { return this._chainCombo }
 
   get legsExtended() { return this._legsExtended }
 
@@ -54,6 +65,39 @@ export class Physics {
   get upperBodyMax() { return config.PLAYER_HEIGHT }
   get lowerBodyMin() { return 0 }
   get lowerBodyMax() { return config.KICK_HIP_Y }
+
+  enterGrinding() {
+    this._state = STATE.GRINDING
+    this.velocity.set(0, 0, 0)
+    this._airJumpsLeft = config.MAX_AIR_JUMPS
+    this.addChainBoost(config.GRIND_SPEED_BOOST)
+    if (this.onGrind) this.onGrind()
+  }
+
+  exitGrinding(tangent) {
+    this._state = STATE.AIRBORNE
+    if (tangent) {
+      const exitY = tangent.y * this._momentum
+      this.velocity.set(
+        tangent.x * this._momentum,
+        Math.min(exitY, -5),
+        tangent.z * this._momentum
+      )
+    }
+  }
+
+  addChainBoost(boost) {
+    if (this._chainTimer > 0) {
+      this._chainCombo++
+      const multiplied = boost * Math.pow(config.CHAIN_MULTIPLIER, this._chainCombo)
+      this._momentum = Math.min(this._momentum + multiplied, config.MOMENTUM_MAX)
+      if (this.onChain) this.onChain(this._chainCombo)
+    } else {
+      this._chainCombo = 0
+      this._momentum = Math.min(this._momentum + boost, config.MOMENTUM_MAX)
+    }
+    this._chainTimer = config.CHAIN_WINDOW
+  }
 
   update(humanoid, moveDir, wDown, sDown, eDown, jumpPressed, delta, obstacles, wallAABBs = []) {
     this._landedOnGround = false
@@ -67,7 +111,11 @@ export class Physics {
 
     // 1. Jump — grounded, coyote time, air jump, or wall jump
     if (jumpPressed) {
-      if (this._state === STATE.WALLRUNNING) {
+      if (this._state === STATE.GRINDING) {
+        this.velocity.y = config.JUMP_SPEED
+        this._state = STATE.AIRBORNE
+        this._airJumpsLeft = config.MAX_AIR_JUMPS
+      } else if (this._state === STATE.WALLRUNNING) {
         this.velocity.y = config.WALLRUN_JUMP_SPEED
         this.velocity.x = this._wallNormalX * config.WALLRUN_KICK_SPEED
         this._wallKickTimer = config.WALLRUN_KICK_DURATION
@@ -92,53 +140,58 @@ export class Physics {
       this.velocity.y -= config.GRAVITY * delta
       if (this._coyoteTimer > 0) this._coyoteTimer -= delta
     } else if (this._state === STATE.WALLRUNNING) {
-      this.velocity.y = -config.WALLRUN_SLIDE_SPEED
-      if (sDown) {
+      this.velocity.y -= config.WALLRUN_GRAVITY * delta
+      this._wallrunTimer -= delta
+      if (sDown || this._wallrunTimer <= 0) {
         this._state = STATE.AIRBORNE
       }
     }
 
-    // 3. Horizontal velocity from input
+    // 3. Momentum decay + chain timer
     if (this._wallKickTimer > 0) this._wallKickTimer -= delta
     if (this._wallrunGraceTimer > 0) this._wallrunGraceTimer -= delta
-
-    // Keep speed bounds in sync with config (debug menu changes)
-    this._speedFloor = THREE.MathUtils.clamp(this._speedFloor, config.MOVE_SPEED_MIN, config.MOVE_SPEED_MAX)
-    this._moveSpeed = THREE.MathUtils.clamp(this._moveSpeed, this._speedFloor, config.MOVE_SPEED_MAX)
-
-    // Sync _moveSpeed to actual horizontal speed so any drop is reflected
-    // Skip during wall run — forced velocity.x=0 would artificially reduce it
-    if (this._state !== STATE.WALLRUNNING) {
-      const currentHSpeed = this.horizontalSpeed
-      if (currentHSpeed < this._moveSpeed) {
-        this._moveSpeed = Math.max(currentHSpeed, this._speedFloor)
-      }
+    if (this._chainTimer > 0) {
+      this._chainTimer -= delta
+      if (this._chainTimer <= 0) this._chainCombo = 0
     }
 
-    // Ramp move speed while moving (any state), reset when stopped
+    // Track transitions out of special states for chain detection
+    const inSpecialState = this._state === STATE.WALLRUNNING || this._state === STATE.GRINDING
+    if (!inSpecialState && this._lastSpecialState) {
+      this._chainTimer = config.CHAIN_WINDOW
+    }
+    this._lastSpecialState = inSpecialState ? this._state : null
+
+    // Momentum ramp / decay
     const isMoving = moveDir.x !== 0 || moveDir.z !== 0
-    if (isMoving) {
-      if (this._state === STATE.WALLRUNNING && moveDir.x * this._wallNormalX < 0 && this._wallrunGraceTimer <= 0) {
-        this._moveSpeed = this._speedFloor
-      } else {
-        this._moveSpeed = Math.min(this._moveSpeed + config.MOVE_ACCEL * delta, config.MOVE_SPEED_MAX)
-      }
-    } else {
-      this._moveSpeed = this._speedFloor
+    if (this._state === STATE.GROUNDED && isMoving) {
+      this._momentum += config.MOMENTUM_ACCEL * delta
+      this._momentum -= config.MOMENTUM_GROUND_FRICTION * delta
+    } else if (this._state === STATE.GROUNDED && !isMoving) {
+      this._momentum = config.MOMENTUM_MIN
+    } else if (this._state === STATE.AIRBORNE && isMoving) {
+      this._momentum -= config.MOMENTUM_DECAY * 0.3 * delta
+    } else if (this._state === STATE.AIRBORNE) {
+      this._momentum -= config.MOMENTUM_DECAY * 0.5 * delta
     }
+    // No decay while grinding or wall running
+    this._momentum = Math.max(this._momentum, config.MOMENTUM_MIN)
+    this._momentum = Math.min(this._momentum, config.MOMENTUM_MAX)
 
-    const boostedSpeed = this._moveSpeed + this._speedBoost
+    const currentSpeed = this._momentum
 
     if (this._state === STATE.HANGING || this._state === STATE.PULLING_UP) {
       this.velocity.set(0, 0, 0)
+    } else if (this._state === STATE.GRINDING) {
+      // Grinding velocity handled by railSystem — don't override here
     } else if (this._state === STATE.WALLRUNNING) {
       this.velocity.x = -this._wallNormalX * config.WALLRUN_STICK_SPEED
-      this.velocity.z = moveDir.z * boostedSpeed
+      this.velocity.z = moveDir.z * currentSpeed
     } else if (this._wallKickTimer > 0) {
-      this.velocity.z = moveDir.z * boostedSpeed
+      this.velocity.z = moveDir.z * currentSpeed
     } else {
-      this.velocity.x = moveDir.x * boostedSpeed
-      this.velocity.z = moveDir.z * boostedSpeed
+      this.velocity.x = moveDir.x * currentSpeed
+      this.velocity.z = moveDir.z * currentSpeed
     }
 
     // 4. Sub-stepped integration + collision to prevent tunneling at high speeds
@@ -150,6 +203,8 @@ export class Physics {
     let touchingWall = false
     for (let s = 0; s < subSteps; s++) {
       humanoid.position.addScaledVector(this.velocity, subDelta)
+
+      if (this._state === STATE.GRINDING) continue
 
       // Ground plane
       if (humanoid.position.y <= config.GROUND_Y) {
@@ -168,7 +223,10 @@ export class Physics {
       // AABB collision vs obstacles
       touchingWall = false
       if (this._state !== STATE.HANGING && this._state !== STATE.PULLING_UP) {
+        const px = humanoid.position.x, pz = humanoid.position.z
         for (const obs of obstacles) {
+          const a = obs.aabb
+          if (pz - 3 > a.max.z || pz + 3 < a.min.z || px - 3 > a.max.x || px + 3 < a.min.x) continue
           if (obs.isBillboard) {
             if (this._wallKickTimer > 0) continue
             const hitAxis = this._resolveAABBAxis(humanoid, obs.aabb)
@@ -177,7 +235,8 @@ export class Physics {
               this._airJumpsLeft = config.MAX_AIR_JUMPS
             }
             if (hitAxis === 'x' && this._state === STATE.AIRBORNE &&
-                humanoid.position.y > config.WALLRUN_MIN_HEIGHT) {
+                humanoid.position.y > config.WALLRUN_MIN_HEIGHT &&
+                this._momentum >= config.WALLRUN_MIN_ENTRY_SPEED) {
               this._state = STATE.WALLRUNNING
               this._wallNormalX = obs.wallNormalX
               this._wallrunEntrySpeed = this._moveSpeed
@@ -185,6 +244,8 @@ export class Physics {
               this.velocity.y = Math.max(this.velocity.y, 0)
               this._airJumpsLeft = config.MAX_AIR_JUMPS
               if (this.onWallRun) this.onWallRun()
+              this._wallrunTimer = config.WALLRUN_MAX_DURATION
+              this.addChainBoost(config.WALLRUN_SPEED_BOOST)
             }
           } else {
             // Upper body always collides
@@ -231,8 +292,8 @@ export class Physics {
           if (obs.isBillboard) continue
           const a = obs.aabb
           if (kMaxX <= a.min.x || kMinX >= a.max.x ||
-              kMaxY <= a.min.y || kMinY >= a.max.y ||
-              kMaxZ <= a.min.z || kMinZ >= a.max.z) continue
+              kMaxZ <= a.min.z || kMinZ >= a.max.z ||
+              kMaxY <= a.min.y || kMinY >= a.max.y) continue
 
           // Overlap on each axis
           const ox = Math.min(kMaxX - a.min.x, a.max.x - kMinX)
@@ -269,6 +330,7 @@ export class Physics {
 
       // Wall collision
       for (const aabb of wallAABBs) {
+        if (humanoid.position.z - 3 > aabb.max.z || humanoid.position.z + 3 < aabb.min.z) continue
         const upperH = config.PLAYER_HEIGHT - config.KICK_HIP_Y
         this._resolveAABB(humanoid, aabb, config.KICK_HIP_Y, upperH)
         if (!this._legsExtended) {
@@ -290,7 +352,7 @@ export class Physics {
     }
 
     // Reset air jumps when grounded or wall running
-    if (this._state === STATE.GROUNDED || this._state === STATE.WALLRUNNING) {
+    if (this._state === STATE.GROUNDED || this._state === STATE.WALLRUNNING || this._state === STATE.GRINDING) {
       this._airJumpsLeft = config.MAX_AIR_JUMPS
     }
 
@@ -452,6 +514,7 @@ export class Physics {
       this._hangAABB = obs.aabb
       this._speedBoost = 0
       this._moveSpeed = config.MOVE_SPEED_MIN
+      this._momentum = config.MOMENTUM_MIN
       this.velocity.set(0, 0, 0)
       if (this.onGrab) this.onGrab()
       return
@@ -469,6 +532,10 @@ export class Physics {
     this._moveSpeed = config.MOVE_SPEED_MIN
     this._speedFloor = config.MOVE_SPEED_MIN
     this._pullUpTimer = 0
+    this._momentum = config.MOMENTUM_MIN
+    this._chainTimer = 0
+    this._chainCombo = 0
+    this._wallrunTimer = 0
   }
 
   static spawnPosition() {

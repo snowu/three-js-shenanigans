@@ -10,6 +10,7 @@ const ANIM_STATE = {
   PULL_UP:    'pullUp',
   WALLRUN:    'wallrun',
   KICK:       'kick',
+  GRINDING:   'grinding',
 }
 
 export class HumanoidAnimator {
@@ -31,6 +32,8 @@ export class HumanoidAnimator {
     this.cameraHandRX = 0
     this.cameraHandRY = 0
     this.legsVisible = false
+    this.cameraRoll = 0
+    this.targetFOV = config.MOMENTUM_FOV_MIN
 
     physics.onLand = () => {
       if (this._airborneTimer < 0.1) return
@@ -76,6 +79,8 @@ export class HumanoidAnimator {
     } else if (this._state !== ANIM_STATE.HANGING && this._state !== ANIM_STATE.PULL_UP) {
       if (phys.state === 'pullingUp') {
         this._setState(ANIM_STATE.PULL_UP)
+      } else if (phys.state === 'grinding') {
+        this._setState(ANIM_STATE.GRINDING)
       } else if (phys.state === 'wallrunning') {
         this._setState(ANIM_STATE.WALLRUN)
       } else if (phys.state === 'grounded') {
@@ -114,7 +119,21 @@ export class HumanoidAnimator {
       case ANIM_STATE.PULL_UP:  this._posePullUp(); break
       case ANIM_STATE.WALLRUN:  this._poseWallRun(); break
       case ANIM_STATE.KICK:     this._poseKick(); break
+      case ANIM_STATE.GRINDING: this._poseGrinding(); break
     }
+
+    // Camera roll for wall running
+    if (this._state === ANIM_STATE.WALLRUN) {
+      const wallSide = -this._physics._wallNormalX
+      this.cameraRoll = wallSide * config.WALLRUN_CAMERA_ROLL
+    } else {
+      this.cameraRoll = this.cameraRoll * 0.85
+      if (Math.abs(this.cameraRoll) < 0.001) this.cameraRoll = 0
+    }
+
+    // FOV based on momentum
+    const momentumT = (this._physics.momentum - config.MOMENTUM_MIN) / (config.MOMENTUM_MAX - config.MOMENTUM_MIN)
+    this.targetFOV = config.MOMENTUM_FOV_MIN + momentumT * (config.MOMENTUM_FOV_MAX - config.MOMENTUM_FOV_MIN)
   }
 
   _resetLimbs() {
@@ -273,6 +292,31 @@ export class HumanoidAnimator {
     this.cameraHandLX = -0.03
     this.cameraHandRX = 0.03
     this.legsVisible = true
+  }
+
+  _poseGrinding() {
+    this._resetLimbs()
+    const j = this._joints
+    const phase = this._time * 3
+
+    // Crouch: knees bent, low center of gravity
+    j.hipL.rotation.x = 0.6
+    j.hipR.rotation.x = 0.6
+
+    // Arms out for balance
+    j.shoulderL.rotation.z = 0.8 + Math.sin(phase) * 0.05
+    j.shoulderR.rotation.z = -0.8 + Math.sin(phase + Math.PI) * 0.05
+    j.shoulderL.rotation.x = 0.2
+    j.shoulderR.rotation.x = 0.2
+
+    // Camera: low crouch + subtle vibration
+    this.cameraYOffset = -0.15 + Math.sin(phase * 4) * 0.005
+
+    // FP hands out to sides
+    this.cameraHandLX = -0.08
+    this.cameraHandRX = 0.08
+    this.cameraHandLY = -0.02 + Math.sin(phase) * 0.005
+    this.cameraHandRY = -0.02 + Math.sin(phase + Math.PI) * 0.005
   }
 
   _posePullUp() {

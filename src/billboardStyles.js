@@ -569,13 +569,9 @@ function makeSurvScreen(w, h) {
 }
 
 export function createSkyScreens(scene) {
-  const left = makeSurvScreen(12, 7)
-  skyScreens.push({ ...left, type: 'left', rngSeed: Math.random() })
-  scene.add(left.mesh)
-
-  const right = makeSurvScreen(12, 7)
-  skyScreens.push({ ...right, type: 'right', rngSeed: Math.random() })
-  scene.add(right.mesh)
+  const screen = makeSurvScreen(18, 10)
+  skyScreens.push({ ...screen, type: 'center', rngSeed: Math.random() })
+  scene.add(screen.mesh)
 }
 
 function getCameraAngle(mode, time, playerPos, side) {
@@ -634,12 +630,13 @@ export function updateSkyScreens(time, playerPos, score, gameTime) {
       s.lastEpoch = epoch
     }
 
-    const side = s.type === 'left' ? -1 : 1
-    const cam = getCameraAngle(s.currentView, time, playerPos, side)
+    const side = s.type === 'left' ? -1 : s.type === 'right' ? 1 : 0
+    const camSide = side === 0 ? 1 : side
+    const cam = getCameraAngle(s.currentView, time, playerPos, camSide)
 
     const screenX = playerPos.x + side * 20
-    const screenY = 21
-    const screenZ = playerPos.z - 30
+    const screenY = 25
+    const screenZ = playerPos.z - 35
 
     s.mesh.position.set(screenX, screenY, screenZ)
     s.mesh.lookAt(playerPos.x, playerPos.y + 1, playerPos.z)
@@ -674,8 +671,8 @@ let productAdCounter = 0
 
 export function createBillboardMeshes(bb, config, styleIndex = 0) {
   const meshes = []
-  const bbH = config.BILLBOARD_HEIGHT
-  const bbW = config.BILLBOARD_WIDTH
+  const bbH = bb.height || config.BILLBOARD_HEIGHT
+  const bbW = bb.width || config.BILLBOARD_WIDTH
   const bbD = config.BILLBOARD_DEPTH
   const bbY = bb.y + bbH / 2
 
@@ -704,9 +701,10 @@ export function createBillboardMeshes(bb, config, styleIndex = 0) {
   return { meshes, mainMesh: main, styleIndex }
 }
 
-const productAdMaterials = []
+let productAdMaterials = []
 
 export function registerProductAdMaterial(mat) {
+  mat.addEventListener('dispose', () => { mat._disposed = true })
   productAdMaterials.push(mat)
 }
 
@@ -714,7 +712,12 @@ export function updateBillboardMaterials(time, score, gameTime) {
   for (const mat of materials) {
     mat.uniforms.time.value = time
   }
+  // Prune disposed materials periodically
+  if (productAdMaterials.length > 50) {
+    productAdMaterials = productAdMaterials.filter(m => !m._disposed)
+  }
   for (const mat of productAdMaterials) {
+    if (mat._disposed) continue
     mat.uniforms.time.value = time
   }
 }

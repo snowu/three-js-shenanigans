@@ -556,7 +556,15 @@ export function updatePlatformMaterials(time) {
   volcanicMat.uniforms.time.value = time
   for (const m of puddlePool) m.uniforms.time.value = time
 
+  // Prune drips from removed segments
+  if (activeDrips.length > 100) {
+    for (let i = activeDrips.length - 1; i >= 0; i--) {
+      if (!activeDrips[i].drip.parent) activeDrips.splice(i, 1)
+    }
+  }
+
   for (const d of activeDrips) {
+    if (!d.drip.parent) continue
     const t = ((time * d.speed + d.phase) % 1 + 1) % 1
     if (t < 0.6) {
       const grow = t / 0.6
