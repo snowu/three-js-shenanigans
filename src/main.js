@@ -222,10 +222,16 @@ function rebuildPlayerHelper() {
   _prevPH = config.PLAYER_HEIGHT
 }
 
+function disposeHelper(h) {
+  scene.remove(h)
+  if (h.geometry) h.geometry.dispose()
+  if (h.material && !h.material._shared) h.material.dispose()
+}
+
 function rebuildObstacleHelpers() {
-  obstacleHelpers.forEach(h => scene.remove(h))
-  ledgeHelpers.forEach(h => scene.remove(h))
-  seamHelpers.forEach(h => scene.remove(h))
+  obstacleHelpers.forEach(disposeHelper)
+  ledgeHelpers.forEach(disposeHelper)
+  seamHelpers.forEach(disposeHelper)
   const allObs = courses.flatMap(c => c.allObstacles)
   obstacleHelpers = allObs.map(({ aabb }) => {
     const h = createObstacleHitboxHelper(aabb, 0xffffff)
@@ -275,7 +281,7 @@ function rebuildObstacleHelpers() {
   }
 
   // Issue markers — red for overlap/clip, yellow for unreachable
-  issueHelpers.forEach(h => scene.remove(h))
+  issueHelpers.forEach(disposeHelper)
   issueHelpers = []
   for (const c of courses) {
     if (!c._segments) continue
@@ -319,12 +325,12 @@ function animate(timestamp) {
 
   // Generate segments for all courses
   const currentSpeed = Math.sqrt(physics.velocity.x ** 2 + physics.velocity.z ** 2)
-  let anyAdded = false
+  let anyChanged = false
   for (const c of courses) {
-    const { added } = c.update(humanoid.position.z, currentSpeed, scene, THREE)
-    if (added.length > 0) anyAdded = true
+    const { added, visChanged } = c.update(humanoid.position.z, currentSpeed, scene, THREE)
+    if (added.length > 0 || visChanged) anyChanged = true
   }
-  if (anyAdded) rebuildObstacleHelpers()
+  if (anyChanged) rebuildObstacleHelpers()
 
   if (config.PLAYER_WIDTH !== _prevPW || config.PLAYER_HEIGHT !== _prevPH) {
     rebuildPlayerHelper()
@@ -371,7 +377,7 @@ function animate(timestamp) {
   } else if (physics.state === 'airborne' && physics.velocity.y <= 0) {
     // Try to mount a rail
     for (const railData of courses.flatMap(c => c.allRails)) {
-      if (railGrinder.tryMount(railData, humanoid.position, physics.velocity.y)) {
+      if (railGrinder.tryMount(railData, humanoid.position, physics.velocity.y, physics.velocity)) {
         physics.enterGrinding()
         break
       }

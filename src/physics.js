@@ -510,6 +510,7 @@ export class Physics {
       this._hangAABB = obs.aabb
       this._speedBoost = 0
       this._moveSpeed = config.MOVE_SPEED_MIN
+      this._momentum = config.MOMENTUM_MIN
       this.velocity.set(0, 0, 0)
       if (this.onGrab) this.onGrab()
       return

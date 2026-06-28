@@ -62,7 +62,7 @@ export class RailGrinder {
   get isGrinding() { return this._activeRail !== null }
   get activeRail() { return this._activeRail }
 
-  tryMount(railData, playerPos, playerVelY) {
+  tryMount(railData, playerPos, playerVelY, playerVelocity) {
     if (playerVelY > 0) return false
     if (this._activeRail) return false
     if (railData.railDef === this._lastRail) return false
@@ -112,6 +112,16 @@ export class RailGrinder {
     this._lastRail = railDef
     this._t = bestT
     this._speed = 0
+
+    // Determine grind direction from player velocity vs spline tangent
+    const tangent = railDef.getTangentAt(bestT)
+    if (playerVelocity) {
+      const dot = tangent.x * playerVelocity.x + tangent.z * playerVelocity.z
+      this._forward = dot >= 0 ? 1 : -1
+    } else {
+      this._forward = 1
+    }
+
     return true
   }
 

@@ -704,9 +704,10 @@ export function createBillboardMeshes(bb, config, styleIndex = 0) {
   return { meshes, mainMesh: main, styleIndex }
 }
 
-const productAdMaterials = []
+let productAdMaterials = []
 
 export function registerProductAdMaterial(mat) {
+  mat.addEventListener('dispose', () => { mat._disposed = true })
   productAdMaterials.push(mat)
 }
 
@@ -714,7 +715,12 @@ export function updateBillboardMaterials(time, score, gameTime) {
   for (const mat of materials) {
     mat.uniforms.time.value = time
   }
+  // Prune disposed materials periodically
+  if (productAdMaterials.length > 50) {
+    productAdMaterials = productAdMaterials.filter(m => !m._disposed)
+  }
   for (const mat of productAdMaterials) {
+    if (mat._disposed) continue
     mat.uniforms.time.value = time
   }
 }

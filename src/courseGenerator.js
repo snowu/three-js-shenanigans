@@ -24,27 +24,25 @@ function hasOverlap(plat, other) {
   return overlapX > 0 && overlapZ > 0 && overlapY > 0
 }
 
+function bbOverlapsZRange(plat, bb) {
+  const bbHalfD = config.FACADE_DEPTH / 2
+  return (plat.d / 2 + bbHalfD) - Math.abs(plat.z - bb.z) > 0
+}
+
 function clampXAwayFromBillboards(plat, billboards, halfW) {
   let xMin = -halfW
   let xMax = halfW
   for (const bb of billboards) {
-    const bbHalfD = config.FACADE_DEPTH / 2
-    const bbHeight = bb.height || config.FACADE_HEIGHT_MIN
-    const bbHalfH = bbHeight / 2
-    const bbY = bb.y + bbHalfH
-    const zOvlp = (plat.d / 2 + bbHalfD) - Math.abs(plat.z - bb.z)
-    const yOvlp = (plat.h / 2 + bbHalfH) - Math.abs(plat.y - bbY)
-    if (zOvlp > 0 && yOvlp > 0) {
-      const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
-      const innerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
-      if (bb.side > 0) {
-        xMax = Math.min(xMax, innerEdge - config.FACADE_MIN_CLEARANCE - plat.w / 2)
-      } else {
-        xMin = Math.max(xMin, innerEdge + config.FACADE_MIN_CLEARANCE + plat.w / 2)
-      }
+    if (!bbOverlapsZRange(plat, bb)) continue
+    const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
+    const innerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
+    if (bb.side > 0) {
+      xMax = Math.min(xMax, innerEdge - config.FACADE_MIN_CLEARANCE - plat.w / 2)
+    } else {
+      xMin = Math.max(xMin, innerEdge + config.FACADE_MIN_CLEARANCE + plat.w / 2)
     }
   }
-  if (xMin > xMax) return // Can't satisfy both — leave X alone, Z push will handle it
+  if (xMin > xMax) return
   plat.x = Math.round(clamp(plat.x, xMin, xMax) * 10) / 10
 }
 
@@ -219,15 +217,11 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     // Prevent platform from being too close to any billboard
     const clearance = config.FACADE_MIN_CLEARANCE
     for (const bb of billboards) {
-      const bbHalfD = config.FACADE_DEPTH / 2
+      if (!bbOverlapsZRange(plat, bb)) continue
       const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
-      const bbHeight = bb.height || config.FACADE_HEIGHT_MIN
-      const bbHalfH = bbHeight / 2
-      const bbY = bb.y + bbHalfH
-      const zOverlap = (plat.d / 2 + bbHalfD + clearance) - Math.abs(plat.z - bb.z)
+      const bbHalfD = config.FACADE_DEPTH / 2
       const xOverlap = (plat.w / 2 + bbHalfW + config.FACADE_HITBOX_PAD + clearance) - Math.abs(plat.x - bb.x)
-      const yOverlap = (plat.h / 2 + bbHalfH) - Math.abs(plat.y - bbY)
-      if (zOverlap > 0 && xOverlap > 0 && yOverlap > 0) {
+      if (xOverlap > 0) {
         const bbInnerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
         if (bb.side > 0) {
           plat.x = Math.round(Math.min(plat.x, bbInnerEdge - clearance - plat.w / 2) * 10) / 10
@@ -332,13 +326,11 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     for (const plat of platforms) {
       if (plat.isSpawn) continue
       for (const bb of billboards) {
-        const bbHalfD = config.FACADE_DEPTH / 2
+        if (!bbOverlapsZRange(plat, bb)) continue
         const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
-        const bbHeight = bb.height || config.FACADE_HEIGHT_MIN
-        const bbHalfH = bbHeight / 2
-        const bbY = bb.y + bbHalfH
-        const padded = { w: (bb.width || config.FACADE_WIDTH) + config.FACADE_HITBOX_PAD * 2, d: config.FACADE_DEPTH, h: bbHeight, x: bb.x, z: bb.z, y: bbY }
-        if (hasOverlap(plat, padded)) {
+        const bbHalfD = config.FACADE_DEPTH / 2
+        const xOverlap = (plat.w / 2 + bbHalfW + config.FACADE_HITBOX_PAD + finalClearance) - Math.abs(plat.x - bb.x)
+        if (xOverlap > 0) {
           const oldX = plat.x, oldZ = plat.z
           const bbInnerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
           if (bb.side > 0) {
@@ -346,7 +338,8 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
           } else {
             plat.x = Math.round(Math.max(plat.x, bbInnerEdge + finalClearance + plat.w / 2) * 10) / 10
           }
-          if (hasOverlap(plat, padded)) {
+          const xStill = (plat.w / 2 + bbHalfW + config.FACADE_HITBOX_PAD + finalClearance) - Math.abs(plat.x - bb.x)
+          if (xStill > 0) {
             plat.z = Math.round((bb.z - bbHalfD - plat.d / 2 - finalClearance) * 10) / 10
           }
           if (plat.x !== oldX || plat.z !== oldZ) anyChange = true
@@ -537,14 +530,21 @@ export class CourseManager {
     this._platformCounter = 0
     this._lastBillboardZ = null
     this._prevSegmentPlatforms = null
-    this._allRails = []
   }
 
-  get allRails() { return this._allRails }
+  get allRails() {
+    const out = []
+    for (const seg of this._segments) {
+      if (seg._visible === false) continue
+      if (seg.railData) for (const r of seg.railData) out.push(r)
+    }
+    return out
+  }
 
   get allObstacles() {
     const out = []
     for (const seg of this._segments) {
+      if (seg._visible === false) continue
       for (const obs of seg.obstacles) out.push(obs)
     }
     return out
@@ -567,7 +567,6 @@ export class CourseManager {
     this._platformCounter = 0
     this._lastBillboardZ = null
     this._prevSegmentPlatforms = null
-    this._allRails = []
   }
 
   update(playerZ, currentSpeed, scene, THREE) {
@@ -587,7 +586,20 @@ export class CourseManager {
       for (const m of seg.meshes) { scene.add(m); added.push(m) }
     }
 
-    return { added, removed: [] }
+    // Hide/show segments based on distance — keep all for respawn
+    const activeRange = config.FOG_END + config.SEGMENT_DEPTH * 2
+    let visChanged = false
+    for (const seg of this._segments) {
+      const segEnd = seg.startZ - config.SEGMENT_DEPTH
+      const dist = Math.abs(playerZ - (seg.startZ + segEnd) / 2)
+      const shouldShow = dist < activeRange
+      if (seg._visible !== shouldShow) {
+        seg._visible = shouldShow
+        visChanged = true
+        for (const m of seg.meshes) m.visible = shouldShow
+      }
+    }
+    return { added, removed: [], visChanged }
   }
 
 
@@ -641,13 +653,12 @@ export class CourseManager {
       const result = createRailMeshes(railDef)
       meshes.push(result.group)
       segmentRails.push(result)
-      this._allRails.push(result)
     }
 
     const allIssues = validateSegment(platforms, billboards, prevNeighbors)
     const issues = allIssues.filter(i => i.type === 'overlap' || i.type === 'clip')
 
-    return { index, startZ, platforms, meshes, obstacles, issues }
+    return { index, startZ, platforms, meshes, obstacles, issues, railData: segmentRails }
   }
 
   segmentBoundaries() {
