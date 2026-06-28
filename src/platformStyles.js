@@ -85,15 +85,15 @@ const volcanicMat = new THREE.ShaderMaterial({
 const volcanicBoxGeo = new THREE.BoxGeometry(1, 1, 1, 8, 2, 8)
 
 const volcanicDripMat = new THREE.MeshStandardMaterial({
-  color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 2,
+  color: 0xff4400, emissive: 0xff3300, emissiveIntensity: 4,
   roughness: 0.3, transparent: true, opacity: 0.9,
 })
 const volcanicBlobMat = new THREE.MeshStandardMaterial({
-  color: 0xffaa00, emissive: 0xff6600, emissiveIntensity: 3,
-  roughness: 0.2, transparent: true, opacity: 0.7,
+  color: 0xffaa00, emissive: 0xff6600, emissiveIntensity: 5,
+  roughness: 0.2, transparent: true, opacity: 0.8,
 })
 const volcanicDebrisMat = new THREE.MeshStandardMaterial({
-  color: 0x1a0e06, roughness: 0.95, emissive: 0xff2200, emissiveIntensity: 0.15,
+  color: 0x2a1a0e, roughness: 0.9, emissive: 0xff3300, emissiveIntensity: 0.4,
 })
 
 function buildVolcanic(b) {
