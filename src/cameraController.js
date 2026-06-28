@@ -240,7 +240,11 @@ export class CameraController {
       const eyeY = h.position.y + 1.75 + (a ? a.cameraYOffset : 0)
       this._camera.position.set(h.position.x, eyeY, h.position.z)
       this._camera.rotation.order = 'YXZ'
-      this._camera.rotation.set(this._pitch, this._yaw, 0)
+      this._camera.rotation.set(this._pitch, this._yaw, a ? a.cameraRoll : 0)
+      if (a && a.targetFOV) {
+        this._camera.fov += (a.targetFOV - this._camera.fov) * 0.1
+        this._camera.updateProjectionMatrix()
+      }
       h.rotation.y = this._yaw
 
       // Animate FP hands

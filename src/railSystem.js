@@ -1,0 +1,181 @@
+import * as THREE from 'three'
+import config from './config.js'
+
+export class RailDefinition {
+  constructor(points, isCurved = false) {
+    this.points = points.map(p => new THREE.Vector3(p.x, p.y, p.z))
+    this.isCurved = isCurved
+    this.spline = new THREE.CatmullRomCurve3(this.points)
+    this.length = this.spline.getLength()
+  }
+
+  getPointAt(t) {
+    return this.spline.getPointAt(Math.max(0, Math.min(1, t)))
+  }
+
+  getTangentAt(t) {
+    return this.spline.getTangentAt(Math.max(0, Math.min(1, t)))
+  }
+}
+
+export function createRailMeshes(railDef) {
+  const group = new THREE.Group()
+  const neonColor = railDef.isCurved ? config.RAIL_COLOR_CURVED : config.RAIL_COLOR_STRAIGHT
+  const segments = Math.max(16, Math.floor(railDef.length * 2))
+  const radius = railDef.isCurved ? config.RAIL_RADIUS * 1.3 : config.RAIL_RADIUS
+
+  const trackOffsets = [-config.RAIL_TRACK_SPACING / 2, config.RAIL_TRACK_SPACING / 2]
+  const railMaterials = []
+
+  for (const offsetX of trackOffsets) {
+    const offsetPoints = railDef.points.map((p, i) => {
+      const t = i / Math.max(1, railDef.points.length - 1)
+      const tangent = railDef.spline.getTangentAt(t)
+      const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize()
+      return new THREE.Vector3(p.x + right.x * offsetX, p.y, p.z + right.z * offsetX)
+    })
+
+    const offsetSpline = new THREE.CatmullRomCurve3(offsetPoints)
+    const tubeGeo = new THREE.TubeGeometry(offsetSpline, segments, radius, 6, false)
+    const railMat = new THREE.MeshStandardMaterial({
+      color: 0x888899,
+      metalness: 0.8,
+      roughness: 0.2,
+      emissive: neonColor,
+      emissiveIntensity: config.RAIL_EMISSIVE_INTENSITY,
+    })
+    railMaterials.push(railMat)
+    const mesh = new THREE.Mesh(tubeGeo, railMat)
+    group.add(mesh)
+  }
+
+  // Neon center strip (glow line along the spline center)
+  const glowGeo = new THREE.TubeGeometry(railDef.spline, segments, radius * 0.4, 4, false)
+  const glowMat = new THREE.MeshBasicMaterial({
+    color: neonColor,
+    transparent: true,
+    opacity: 0.6,
+  })
+  railMaterials.push(glowMat)
+  const glowMesh = new THREE.Mesh(glowGeo, glowMat)
+  group.add(glowMesh)
+
+  // Cross-ties
+  const tieSpacing = railDef.isCurved ? config.RAIL_TIE_SPACING * 0.8 : config.RAIL_TIE_SPACING
+  const tieCount = Math.floor(railDef.length / tieSpacing)
+  const tieMat = new THREE.MeshStandardMaterial({ color: 0x444455, metalness: 0.6, roughness: 0.4 })
+  for (let i = 0; i <= tieCount; i++) {
+    const t = i / Math.max(1, tieCount)
+    const pos = railDef.spline.getPointAt(t)
+    const tangent = railDef.getTangentAt(t)
+    const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize()
+
+    const tieGeo = new THREE.BoxGeometry(config.RAIL_TRACK_SPACING + 0.15, 0.04, 0.1)
+    const tie = new THREE.Mesh(tieGeo, tieMat)
+    tie.position.copy(pos)
+    tie.lookAt(pos.clone().add(tangent))
+    group.add(tie)
+  }
+
+  return { group, railDef, railMaterials }
+}
+
+export class RailGrinder {
+  constructor() {
+    this._activeRail = null
+    this._t = 0
+    this._speed = 0
+    this._forward = 1
+    this._lastRail = null
+  }
+
+  get isGrinding() { return this._activeRail !== null }
+  get activeRail() { return this._activeRail }
+
+  tryMount(railData, playerPos, playerVelY) {
+    if (playerVelY > 0) return false
+    if (this._activeRail) return false
+    if (railData.railDef === this._lastRail) return false
+
+    const { railDef } = railData
+
+    // Find closest t on spline via binary search refinement
+    const steps = 20
+    let bestT = 0
+    let bestDist = Infinity
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps
+      const p = railDef.spline.getPointAt(t)
+      const dx = playerPos.x - p.x
+      const dz = playerPos.z - p.z
+      const dy = playerPos.y - p.y
+      const dist = Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+      if (dist < bestDist) {
+        bestDist = dist
+        bestT = t
+      }
+    }
+
+    // Refine with narrower search around best
+    const halfStep = 0.5 / steps
+    for (let i = 0; i <= 10; i++) {
+      const t = Math.max(0, Math.min(1, bestT - halfStep + (halfStep * 2 * i / 10)))
+      const p = railDef.spline.getPointAt(t)
+      const dx = playerPos.x - p.x
+      const dz = playerPos.z - p.z
+      const dy = playerPos.y - p.y
+      const dist = Math.sqrt(dx * dx + dz * dz) + Math.abs(dy)
+      if (dist < bestDist) {
+        bestDist = dist
+        bestT = t
+      }
+    }
+
+    const closest = railDef.spline.getPointAt(bestT)
+    const hDist = Math.sqrt((playerPos.x - closest.x) ** 2 + (playerPos.z - closest.z) ** 2)
+    const yDist = Math.abs(playerPos.y - closest.y)
+
+    if (hDist > config.RAIL_SNAP_RADIUS || yDist > config.RAIL_SNAP_Y_TOLERANCE) return false
+
+    this._activeRail = railDef
+    this._lastRail = railDef
+    this._t = bestT
+    this._speed = 0
+    return true
+  }
+
+  update(delta, momentum) {
+    if (!this._activeRail) return null
+
+    this._speed = momentum
+    const advancement = (this._speed * delta) / this._activeRail.length
+    this._t += advancement * this._forward
+
+    if (this._t >= 1 || this._t <= 0) {
+      const clampedT = Math.max(0, Math.min(1, this._t))
+      const endPos = this._activeRail.getPointAt(clampedT)
+      const endTangent = this._activeRail.getTangentAt(Math.max(0.01, Math.min(0.99, this._t)))
+      this._activeRail = null
+      return { position: endPos, tangent: endTangent, ended: true }
+    }
+
+    const position = this._activeRail.getPointAt(this._t)
+    const tangent = this._activeRail.getTangentAt(this._t)
+    return { position, tangent, ended: false }
+  }
+
+  dismount() {
+    const rail = this._activeRail
+    if (!rail) return null
+    const t = Math.max(0.01, Math.min(0.99, this._t))
+    const tangent = rail.getTangentAt(t)
+    this._activeRail = null
+    return tangent
+  }
+
+  resetCooldown() {
+    this._lastRail = null
+    this._cooldown = 0
+  }
+}

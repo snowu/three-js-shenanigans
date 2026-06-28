@@ -2,6 +2,7 @@ import config from './config.js'
 import { createPlatformMeshes } from './platformStyles.js'
 import { createBillboardMeshes, BILLBOARD_STYLE_COUNT, PRODUCT_AD_STYLE_INDEX, isProductAdStyle, registerProductAdMaterial } from './billboardStyles.js'
 import { buildPlatformAABBs } from './hitboxes.js'
+import { createRailMeshes, RailDefinition } from './railSystem.js'
 import * as THREE from 'three'
 
 function rand(min, max) {
@@ -27,18 +28,19 @@ function clampXAwayFromBillboards(plat, billboards, halfW) {
   let xMin = -halfW
   let xMax = halfW
   for (const bb of billboards) {
-    const bbHalfD = config.BILLBOARD_DEPTH / 2
-    const bbHalfH = config.BILLBOARD_HEIGHT / 2
+    const bbHalfD = config.FACADE_DEPTH / 2
+    const bbHeight = bb.height || config.FACADE_HEIGHT_MIN
+    const bbHalfH = bbHeight / 2
     const bbY = bb.y + bbHalfH
     const zOvlp = (plat.d / 2 + bbHalfD) - Math.abs(plat.z - bb.z)
     const yOvlp = (plat.h / 2 + bbHalfH) - Math.abs(plat.y - bbY)
     if (zOvlp > 0 && yOvlp > 0) {
-      const bbHalfW = config.BILLBOARD_WIDTH / 2
-      const innerEdge = bb.side * config.BILLBOARD_X_OFFSET - bb.side * (bbHalfW + config.BILLBOARD_HITBOX_PAD)
+      const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
+      const innerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
       if (bb.side > 0) {
-        xMax = Math.min(xMax, innerEdge - config.BILLBOARD_MIN_CLEARANCE - plat.w / 2)
+        xMax = Math.min(xMax, innerEdge - config.FACADE_MIN_CLEARANCE - plat.w / 2)
       } else {
-        xMin = Math.max(xMin, innerEdge + config.BILLBOARD_MIN_CLEARANCE + plat.w / 2)
+        xMin = Math.max(xMin, innerEdge + config.FACADE_MIN_CLEARANCE + plat.w / 2)
       }
     }
   }
@@ -123,18 +125,21 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
   for (let i = 0; i < count; i++) {
     // Insert billboard gap before this platform?
-    if (platIndex > 0 && platIndex % config.BILLBOARD_GAP_EVERY === 0 && i >= WARMUP_COUNT) {
+    if (platIndex > 0 && platIndex % config.FACADE_GAP_EVERY === 0 && i >= WARMUP_COUNT) {
       const gapMidZ = nextZ - config.BILLBOARD_GAP_SIZE / 2
       const tooClose = lastBillboardZ !== null &&
-        Math.abs(gapMidZ - lastBillboardZ) < config.BILLBOARD_DEPTH + config.MIN_PLATFORM_SPACING
+        Math.abs(gapMidZ - lastBillboardZ) < config.FACADE_DEPTH + config.MIN_PLATFORM_SPACING
       if (!tooClose) {
         const prevTopY = prev.y + prev.h / 2
         const side = prev.x >= 0 ? 1 : -1
+        const facadeHeight = rand(config.FACADE_HEIGHT_MIN, config.FACADE_HEIGHT_MAX)
         billboards.push({
-          x: side * config.BILLBOARD_X_OFFSET,
-          y: prevTopY - config.BILLBOARD_Y_OFFSET,
+          x: side * config.FACADE_X_OFFSET,
+          y: prevTopY - 1,
           z: gapMidZ,
           side,
+          height: facadeHeight,
+          width: config.FACADE_WIDTH,
         })
         lastBillboardZ = gapMidZ
         nextZ -= config.BILLBOARD_GAP_SIZE
@@ -163,18 +168,21 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
 
     const sizeScale = needsDoubleJump ? config.DOUBLE_JUMP_SIZE_SCALE : 1.0
     const warmupSizeBonus = warmupT < 1 ? 1 + (1 - warmupT) * 0.5 : 1.0
-    const w = config.BOX_WIDTH * sizeScale * warmupSizeBonus
+    const baseWidth = rand(config.BOX_WIDTH_MIN, config.BOX_WIDTH_MAX)
+    const baseDepth = rand(config.BOX_DEPTH_MIN, config.BOX_DEPTH_MAX)
+    const w = baseWidth * sizeScale * warmupSizeBonus
     const h = config.BOX_HEIGHT
-    const d = config.BOX_DEPTH * sizeScale * warmupSizeBonus
+    const d = baseDepth * sizeScale * warmupSizeBonus
 
-    const gap = rand(diff.minGap, diff.maxGap)
-    const pz = nextZ - gap
+    const edgeGap = rand(diff.minGap, diff.maxGap)
+    const prevHalfD = prev.d / 2
+    const pz = nextZ - prevHalfD - edgeGap - d / 2
     nextZ = pz
 
     let px
     if (afterGapSide !== 0) {
       // First platform after gap: spawn on same side as billboard wall
-      const targetX = afterGapSide * (config.BILLBOARD_X_OFFSET - 3)
+      const targetX = afterGapSide * (config.FACADE_X_OFFSET - 3)
       px = clamp(targetX + rand(-1, 1), -halfW + w / 2, halfW - w / 2)
       afterGapSide = 0
     } else {
@@ -209,23 +217,24 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     }
 
     // Prevent platform from being too close to any billboard
-    const clearance = config.BILLBOARD_MIN_CLEARANCE
+    const clearance = config.FACADE_MIN_CLEARANCE
     for (const bb of billboards) {
-      const bbHalfD = config.BILLBOARD_DEPTH / 2
-      const bbHalfW = config.BILLBOARD_WIDTH / 2
-      const bbHalfH = config.BILLBOARD_HEIGHT / 2
+      const bbHalfD = config.FACADE_DEPTH / 2
+      const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
+      const bbHeight = bb.height || config.FACADE_HEIGHT_MIN
+      const bbHalfH = bbHeight / 2
       const bbY = bb.y + bbHalfH
       const zOverlap = (plat.d / 2 + bbHalfD + clearance) - Math.abs(plat.z - bb.z)
-      const xOverlap = (plat.w / 2 + bbHalfW + config.BILLBOARD_HITBOX_PAD + clearance) - Math.abs(plat.x - bb.x)
+      const xOverlap = (plat.w / 2 + bbHalfW + config.FACADE_HITBOX_PAD + clearance) - Math.abs(plat.x - bb.x)
       const yOverlap = (plat.h / 2 + bbHalfH) - Math.abs(plat.y - bbY)
       if (zOverlap > 0 && xOverlap > 0 && yOverlap > 0) {
-        const bbInnerEdge = bb.side * config.BILLBOARD_X_OFFSET - bb.side * (bbHalfW + config.BILLBOARD_HITBOX_PAD)
+        const bbInnerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
         if (bb.side > 0) {
           plat.x = Math.round(Math.min(plat.x, bbInnerEdge - clearance - plat.w / 2) * 10) / 10
         } else {
           plat.x = Math.round(Math.max(plat.x, bbInnerEdge + clearance + plat.w / 2) * 10) / 10
         }
-        const xStillOverlap = (plat.w / 2 + bbHalfW + config.BILLBOARD_HITBOX_PAD + clearance) - Math.abs(plat.x - bb.x)
+        const xStillOverlap = (plat.w / 2 + bbHalfW + config.FACADE_HITBOX_PAD + clearance) - Math.abs(plat.x - bb.x)
         if (xStillOverlap > 0) {
           plat.z = Math.round((bb.z - bbHalfD - plat.d / 2 - clearance) * 10) / 10
           nextZ = plat.z
@@ -240,10 +249,83 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     platIndex++
   }
 
+  // Generate rails
+  const rails = []
+
+  // Straight rails on platform edges
+  for (const plat of platforms) {
+    if (plat.isSpawn) continue
+    if (plat.d < 10) continue
+    if (Math.random() > config.RAIL_EDGE_CHANCE) continue
+
+    const side = Math.random() < 0.5 ? -1 : 1
+    const railX = plat.x + side * (plat.w / 2 - 0.2)
+    const railY = plat.y + plat.h / 2 + 0.3
+    const railZ1 = plat.z + plat.d / 2 - 0.5
+    const railZ2 = plat.z - plat.d / 2 + 0.5
+
+    rails.push({
+      points: [
+        { x: railX, y: railY, z: railZ1 },
+        { x: railX, y: railY, z: railZ2 },
+      ],
+      isCurved: false,
+    })
+  }
+
+  // Curved rails bridging gaps between platforms
+  const curvedCount = Math.floor(config.CURVED_RAILS_PER_SEGMENT + (Math.random() < (config.CURVED_RAILS_PER_SEGMENT % 1) ? 1 : 0))
+  const usedPairs = new Set()
+
+  for (let c = 0; c < curvedCount && platforms.length > 2; c++) {
+    const startIdx = randInt(0, platforms.length - 2)
+    const endIdx = startIdx + 1
+    const pairKey = `${startIdx}-${endIdx}`
+    if (usedPairs.has(pairKey)) continue
+    usedPairs.add(pairKey)
+
+    const startPlat = platforms[startIdx]
+    const endPlat = platforms[endIdx]
+    if (startPlat.isSpawn || endPlat.isSpawn) continue
+
+    const gap = Math.abs(startPlat.z - endPlat.z) - startPlat.d / 2 - endPlat.d / 2
+    if (gap < 6) continue
+
+    const startY = startPlat.y + startPlat.h / 2 + 1.0
+    const endY = endPlat.y + endPlat.h / 2 + 1.0
+    const avgY = (startY + endY) / 2
+    const arcHeight = rand(1.5, 3) * Math.min(1, gap / 12)
+    const midY = avgY + arcHeight
+    const midX = (startPlat.x + endPlat.x) / 2 + rand(-1, 1)
+    const midZ = (startPlat.z + endPlat.z) / 2
+
+    const sz = startPlat.z - startPlat.d / 2
+    const ez = endPlat.z + endPlat.d / 2
+
+    // Quarter-points with gentle Y progression — match Z fraction to avoid vertical starts
+    const qZ1 = sz + (ez - sz) * 0.25
+    const qZ2 = sz + (ez - sz) * 0.75
+    const qX1 = startPlat.x + (midX - startPlat.x) * 0.35
+    const qX2 = midX + (endPlat.x - midX) * 0.65
+    const qY1 = startY + (midY - startY) * 0.35
+    const qY2 = endY + (midY - endY) * 0.35
+
+    rails.push({
+      points: [
+        { x: startPlat.x, y: startY, z: sz },
+        { x: qX1, y: qY1, z: qZ1 },
+        { x: midX, y: midY, z: midZ },
+        { x: qX2, y: qY2, z: qZ2 },
+        { x: endPlat.x, y: endY, z: ez },
+      ],
+      isCurved: true,
+    })
+  }
+
   // Unified post-processing: billboard clearance → overlap resolution → reachability clamp
   // Iterate until stable (max 10 passes)
   const absMaxReach = config.DOUBLE_JUMP_HEIGHT * config.PLAT_HEIGHT_FRAC
-  const finalClearance = config.BILLBOARD_MIN_CLEARANCE
+  const finalClearance = config.FACADE_MIN_CLEARANCE
   for (let pass = 0; pass < 20; pass++) {
     let anyChange = false
 
@@ -251,14 +333,15 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     for (const plat of platforms) {
       if (plat.isSpawn) continue
       for (const bb of billboards) {
-        const bbHalfD = config.BILLBOARD_DEPTH / 2
-        const bbHalfW = config.BILLBOARD_WIDTH / 2
-        const bbHalfH = config.BILLBOARD_HEIGHT / 2
+        const bbHalfD = config.FACADE_DEPTH / 2
+        const bbHalfW = (bb.width || config.FACADE_WIDTH) / 2
+        const bbHeight = bb.height || config.FACADE_HEIGHT_MIN
+        const bbHalfH = bbHeight / 2
         const bbY = bb.y + bbHalfH
-        const padded = { w: config.BILLBOARD_WIDTH + config.BILLBOARD_HITBOX_PAD * 2, d: config.BILLBOARD_DEPTH, h: config.BILLBOARD_HEIGHT, x: bb.x, z: bb.z, y: bbY }
+        const padded = { w: (bb.width || config.FACADE_WIDTH) + config.FACADE_HITBOX_PAD * 2, d: config.FACADE_DEPTH, h: bbHeight, x: bb.x, z: bb.z, y: bbY }
         if (hasOverlap(plat, padded)) {
           const oldX = plat.x, oldZ = plat.z
-          const bbInnerEdge = bb.side * config.BILLBOARD_X_OFFSET - bb.side * (bbHalfW + config.BILLBOARD_HITBOX_PAD)
+          const bbInnerEdge = bb.side * config.FACADE_X_OFFSET - bb.side * (bbHalfW + config.FACADE_HITBOX_PAD)
           if (bb.side > 0) {
             plat.x = Math.round(Math.min(plat.x, bbInnerEdge - finalClearance - plat.w / 2) * 10) / 10
           } else {
@@ -296,7 +379,7 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     if (!anyChange) break
   }
 
-  return { platforms, billboards, lastPlatform: prev, platformCounter: platIndex, lastBillboardZ: lastBillboardZ }
+  return { platforms, billboards, rails, lastPlatform: prev, platformCounter: platIndex, lastBillboardZ: lastBillboardZ }
 }
 
 export function validateSegment(platforms, billboards, neighborPlatforms) {
@@ -335,15 +418,15 @@ export function validateSegment(platforms, billboards, neighborPlatforms) {
     const p = platforms[i]
     for (let j = 0; j < billboards.length; j++) {
       const bb = billboards[j]
-      const bbW = config.BILLBOARD_WIDTH
-      const bbH = config.BILLBOARD_HEIGHT
-      const bbD = config.BILLBOARD_DEPTH
+      const bbW = bb.width || config.FACADE_WIDTH
+      const bbH = bb.height || config.FACADE_HEIGHT_MIN
+      const bbD = config.FACADE_DEPTH
       const bbY = bb.y + bbH / 2
       if (hasOverlap(p, { w: bbW, d: bbD, h: bbH, x: bb.x, z: bb.z, y: bbY })) {
         issues.push({ type: 'clip', platIndices: [i], msg: `CLIP plat ${i} into billboard ${j}` })
       }
       // Check actual geometric overlap with billboard (including hitbox pad)
-      const padded = { w: bbW + config.BILLBOARD_HITBOX_PAD * 2, d: bbD, h: bbH, x: bb.x, z: bb.z, y: bbY }
+      const padded = { w: bbW + config.FACADE_HITBOX_PAD * 2, d: bbD, h: bbH, x: bb.x, z: bb.z, y: bbY }
       if (hasOverlap(p, padded)) {
         issues.push({ type: 'too_close_billboard', platIndices: [i], msg: `TOO CLOSE plat ${i} to billboard ${j}` })
       }
@@ -455,7 +538,10 @@ export class CourseManager {
     this._platformCounter = 0
     this._lastBillboardZ = null
     this._prevSegmentPlatforms = null
+    this._allRails = []
   }
+
+  get allRails() { return this._allRails }
 
   get allObstacles() {
     const out = []
@@ -482,6 +568,7 @@ export class CourseManager {
     this._platformCounter = 0
     this._lastBillboardZ = null
     this._prevSegmentPlatforms = null
+    this._allRails = []
   }
 
   update(playerZ, currentSpeed, scene, THREE) {
@@ -509,7 +596,7 @@ export class CourseManager {
     const index = this._nextSegmentIndex++
     const startZ = -index * config.SEGMENT_DEPTH
 
-    const { platforms, billboards, lastPlatform, platformCounter, lastBillboardZ } = generateSegmentPlatforms(
+    const { platforms, billboards, rails, lastPlatform, platformCounter, lastBillboardZ } = generateSegmentPlatforms(
       this._lastPlatform, startZ, this._difficulty, index === 0, this._platformCounter,
       this._prevSegmentPlatforms, this._lastBillboardZ
     )
@@ -540,12 +627,22 @@ export class CourseManager {
       const result = createBillboardMeshes(bb, config, styleIdx)
       for (const m of result.meshes) meshes.push(m)
       const aabb = new THREE.Box3().setFromObject(result.mainMesh)
-      if (bb.side > 0) aabb.min.x -= config.BILLBOARD_HITBOX_PAD
-      else aabb.max.x += config.BILLBOARD_HITBOX_PAD
+      if (bb.side > 0) aabb.min.x -= config.FACADE_HITBOX_PAD
+      else aabb.max.x += config.FACADE_HITBOX_PAD
       obstacles.push({ mesh: result.mainMesh, aabb, isBillboard: true, wallNormalX: -bb.side })
       if (isProductAdStyle(styleIdx)) {
         registerProductAdMaterial(result.mainMesh.material)
       }
+    }
+
+    // Rails
+    const segmentRails = []
+    for (const railData of rails) {
+      const railDef = new RailDefinition(railData.points, railData.isCurved)
+      const result = createRailMeshes(railDef)
+      meshes.push(result.group)
+      segmentRails.push(result)
+      this._allRails.push(result)
     }
 
     const allIssues = validateSegment(platforms, billboards, prevNeighbors)

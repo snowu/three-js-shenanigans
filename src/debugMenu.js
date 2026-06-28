@@ -24,6 +24,23 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
     for (const c of courses) c.destroyAll(scene)
   }
 
+  function updateRailColors(courses) {
+    for (const c of courses) {
+      for (const rail of c.allRails) {
+        if (!rail.railMaterials) continue
+        const color = rail.railDef.isCurved ? config.RAIL_COLOR_CURVED : config.RAIL_COLOR_STRAIGHT
+        for (const mat of rail.railMaterials) {
+          if (mat.emissive) {
+            mat.emissive.setHex(color)
+            mat.emissiveIntensity = config.RAIL_EMISSIVE_INTENSITY
+          } else {
+            mat.color.setHex(color)
+          }
+        }
+      }
+    }
+  }
+
   // ── Player Physics ────────────────────────────────────────────────────────
   const physics = gui.addFolder('Player Physics')
   physics.add(config, 'GRAVITY', 0, 200, 1)
@@ -35,6 +52,44 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
   physics.add(config, 'GROUND_STICK', 0, 10, 0.5)
   physics.add(config, 'MAX_AIR_JUMPS', 0, 5, 1)
   physics.close()
+
+  // ── Momentum ──────────────────────────────────────────────────────────────
+  const momentum = gui.addFolder('Momentum')
+  momentum.add(config, 'MOMENTUM_MIN', 1, 15, 0.5).name('Min Speed')
+  momentum.add(config, 'MOMENTUM_MAX', 10, 50, 1).name('Max Speed')
+  momentum.add(config, 'MOMENTUM_ACCEL', 0.5, 20, 0.5).name('Accel')
+  momentum.add(config, 'MOMENTUM_DECAY', 0, 2, 0.05).name('Decay')
+  momentum.add(config, 'MOMENTUM_GROUND_FRICTION', 0, 1, 0.01).name('Ground Friction')
+  momentum.add(config, 'GRIND_SPEED_BOOST', 0, 10, 0.5).name('Grind Boost')
+  momentum.add(config, 'CHAIN_WINDOW', 0.1, 5, 0.1).name('Chain Window')
+  momentum.add(config, 'CHAIN_MULTIPLIER', 1, 3, 0.05).name('Chain Multiplier')
+  momentum.close()
+
+  // ── Rails ─────────────────────────────────────────────────────────────────
+  const rails = gui.addFolder('Rails')
+  rails.add(config, 'RAIL_RADIUS', 0.01, 0.2, 0.01).name('Radius').onFinishChange(rebuildCourses)
+  rails.add(config, 'RAIL_SNAP_RADIUS', 0.1, 3, 0.1).name('Snap Radius')
+  rails.add(config, 'RAIL_SNAP_Y_TOLERANCE', 0.1, 3, 0.1).name('Snap Y Tolerance')
+  rails.add(config, 'RAIL_TRACK_SPACING', 0.1, 1, 0.05).name('Track Spacing').onFinishChange(rebuildCourses)
+  rails.add(config, 'RAIL_TIE_SPACING', 0.5, 5, 0.25).name('Tie Spacing').onFinishChange(rebuildCourses)
+  rails.add(config, 'RAIL_EDGE_CHANCE', 0, 1, 0.05).name('Edge Chance').onFinishChange(rebuildCourses)
+  rails.add(config, 'CURVED_RAILS_PER_SEGMENT', 0, 5, 0.5).name('Curved/Segment').onFinishChange(rebuildCourses)
+  rails.add(config, 'RAIL_EMISSIVE_INTENSITY', 0, 2, 0.05).name('Emissive Intensity').onChange(() => updateRailColors(courses))
+  rails.addColor(config, 'RAIL_COLOR_STRAIGHT').name('Straight Color').onChange(() => updateRailColors(courses))
+  rails.addColor(config, 'RAIL_COLOR_CURVED').name('Curved Color').onChange(() => updateRailColors(courses))
+  rails.close()
+
+  // ── Facade ────────────────────────────────────────────────────────────────
+  const facade = gui.addFolder('Building Facades')
+  facade.add(config, 'FACADE_HEIGHT_MIN', 4, 30, 1).name('Height Min').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_HEIGHT_MAX', 4, 30, 1).name('Height Max').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_WIDTH', 0.1, 5, 0.1).name('Width').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_X_OFFSET', 2, 20, 0.5).name('X Offset').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_GAP_EVERY', 1, 10, 1).name('Gap Every').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_DEPTH', 1, 40, 1).name('Depth').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_HITBOX_PAD', 0, 5, 0.1).name('Hitbox Pad').onFinishChange(rebuildCourses)
+  facade.add(config, 'FACADE_MIN_CLEARANCE', 0, 5, 0.5).name('Min Clearance').onFinishChange(rebuildCourses)
+  facade.close()
 
   // ── Player Dimensions ─────────────────────────────────────────────────────
   const dims = gui.addFolder('Player Dimensions')
@@ -86,6 +141,10 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
   wallrun.add(config, 'WALLRUN_MIN_HEIGHT', 0, 10, 0.5)
   wallrun.add(config, 'WALLRUN_GRACE_TIME', 0, 5, 0.1)
   wallrun.add(config, 'WALLRUN_STICK_SPEED', 0, 10, 0.5)
+  wallrun.add(config, 'WALLRUN_GRAVITY', 1, 50, 1).name('Gravity')
+  wallrun.add(config, 'WALLRUN_MIN_ENTRY_SPEED', 1, 20, 0.5).name('Min Entry Speed')
+  wallrun.add(config, 'WALLRUN_MAX_DURATION', 0.5, 5, 0.1).name('Max Duration')
+  wallrun.add(config, 'WALLRUN_CAMERA_ROLL', 0, 1, 0.05).name('Camera Roll')
   wallrun.close()
 
   // ── Billboard ─────────────────────────────────────────────────────────────
@@ -112,9 +171,13 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
   plat.add(config, 'PLAT_DOUBLE_JUMP_CHANCE', 0, 1, 0.05).name('Double Jump %').onFinishChange(rebuildCourses)
   plat.add(config, 'PLAT_MIN_PER_SEGMENT', 1, 15, 1).name('Min Per Segment').onFinishChange(rebuildCourses)
   plat.add(config, 'PLAT_MAX_PER_SEGMENT', 1, 20, 1).name('Max Per Segment').onFinishChange(rebuildCourses)
-  plat.add(config, 'BOX_WIDTH', 0.5, 10, 0.25).name('Box Width').onFinishChange(rebuildCourses)
+  plat.add(config, 'BOX_WIDTH_MIN', 1, 10, 0.5).name('Width Min').onFinishChange(rebuildCourses)
+  plat.add(config, 'BOX_WIDTH_MAX', 1, 15, 0.5).name('Width Max').onFinishChange(rebuildCourses)
+  plat.add(config, 'BOX_WIDTH', 0.5, 10, 0.25).name('Width Default').onFinishChange(rebuildCourses)
   plat.add(config, 'BOX_HEIGHT', 0.1, 3, 0.05).name('Box Height').onFinishChange(rebuildCourses)
-  plat.add(config, 'BOX_DEPTH', 0.5, 10, 0.25).name('Box Depth').onFinishChange(rebuildCourses)
+  plat.add(config, 'BOX_DEPTH_MIN', 2, 20, 1).name('Depth Min').onFinishChange(rebuildCourses)
+  plat.add(config, 'BOX_DEPTH_MAX', 5, 50, 1).name('Depth Max').onFinishChange(rebuildCourses)
+  plat.add(config, 'BOX_DEPTH', 0.5, 30, 0.5).name('Depth Default').onFinishChange(rebuildCourses)
   plat.add(config, 'SPAWN_PLAT_SIZE', 1, 10, 0.5).name('Spawn Platform Size').onFinishChange(rebuildCourses)
   plat.add(config, 'WARMUP_COUNT', 0, 10, 1).name('Warmup Platforms').onFinishChange(rebuildCourses)
   plat.add(config, 'DOUBLE_JUMP_SIZE_SCALE', 0.1, 1.5, 0.05).name('DblJump Size Scale').onFinishChange(rebuildCourses)
@@ -137,6 +200,8 @@ export function createDebugMenu(animator, scene, courses, { camera, ambientLight
   cam.add(config, 'AUTO_AIM_SKIP_PLATFORMS', 0, 6, 1).name('Aim Skip Plats')
   cam.add(config, 'AUTO_AIM_LERP_SPEED', 0.2, 5, 0.1).name('Aim Lerp Speed')
   cam.add(config, 'AUTO_AIM_STRAFE_BIAS', 0, 2, 0.05).name('Aim Strafe Bias')
+  cam.add(config, 'MOMENTUM_FOV_MIN', 60, 120, 1).name('Momentum FOV Min')
+  cam.add(config, 'MOMENTUM_FOV_MAX', 60, 140, 1).name('Momentum FOV Max')
   cam.close()
 
   // ── Lighting ──────────────────────────────────────────────────────────────

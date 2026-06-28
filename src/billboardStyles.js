@@ -674,8 +674,8 @@ let productAdCounter = 0
 
 export function createBillboardMeshes(bb, config, styleIndex = 0) {
   const meshes = []
-  const bbH = config.BILLBOARD_HEIGHT
-  const bbW = config.BILLBOARD_WIDTH
+  const bbH = bb.height || config.BILLBOARD_HEIGHT
+  const bbW = bb.width || config.BILLBOARD_WIDTH
   const bbD = config.BILLBOARD_DEPTH
   const bbY = bb.y + bbH / 2
 

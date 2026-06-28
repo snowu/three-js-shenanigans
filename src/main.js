@@ -9,6 +9,7 @@ import { CourseManager, BillboardTestCourse } from './obstacles.js'
 import { updatePlatformMaterials } from './platformStyles.js'
 import { updateBillboardMaterials, initSurveillance, createSkyScreens, updateSkyScreens } from './billboardStyles.js'
 import { Physics } from './physics.js'
+import { RailGrinder } from './railSystem.js'
 import { HumanoidAnimator } from './humanoidAnimator.js'
 import { makeWireBox, createPlayerHitboxHelpers, updatePlayerHitboxPositions, createObstacleHitboxHelper } from './hitboxes.js'
 import { createDebugMenu } from './debugMenu.js'
@@ -54,6 +55,7 @@ const physics  = new Physics()
 const cameraController = new CameraController(camera, renderer.domElement, humanoid, scene)
 const movement = new Movement(physics, cameraController.joystick)
 const animator = new HumanoidAnimator(joints, physics)
+const railGrinder = new RailGrinder()
 cameraController.animator = animator
 createDebugMenu(animator, scene, courses, { camera, ambientLight, dirLight })
 
@@ -84,11 +86,42 @@ const speedEl = document.getElementById('speed-meter')
 const airJumpsEl = document.getElementById('air-jumps')
 const stateEl = document.getElementById('player-state')
 const timerEl = document.getElementById('timer')
+const momentumBar = document.getElementById('momentum-bar')
+const chainCounterEl = document.getElementById('chain-counter')
 let score = 0
 let bestScore = 0
 let runTime = 0
 let timerStarted = false
+let chainDisplayTimer = 0
 const touchedBoxes = new Set()
+
+// Tony Hawk-style scoring: points accumulate during grinds/wall runs,
+// multiplier increases with each grind/wall run without touching a platform
+let trickScore = 0
+let trickMultiplier = 1
+let inTrick = false
+let trickScoreTimer = 0
+const TRICK_POINTS_PER_SEC_GRIND = 50
+const TRICK_POINTS_PER_SEC_WALLRUN = 30
+
+function updateScoreDisplay() {
+  scoreEl.textContent = score
+  if (score > bestScore) {
+    bestScore = score
+    bestEl.textContent = bestScore
+  }
+}
+
+function bankTrickScore() {
+  if (trickScore > 0) {
+    const banked = Math.floor(trickScore * trickMultiplier)
+    score += banked
+    updateScoreDisplay()
+    trickScore = 0
+  }
+  trickMultiplier = 1
+  inTrick = false
+}
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60)
@@ -100,29 +133,51 @@ physics.onBoxLand = (obs) => {
   if (obs.isSpawn || touchedBoxes.has(obs)) return
   touchedBoxes.add(obs)
   score++
-  scoreEl.textContent = score
-  if (score > bestScore) {
-    bestScore = score
-    bestEl.textContent = bestScore
-  }
+  updateScoreDisplay()
+}
+
+const _originalOnLand = physics.onLand
+physics.onLand = () => {
+  if (_originalOnLand) _originalOnLand()
+  bankTrickScore()
+  trickMultiplier = 1
+  inTrick = false
+  railGrinder.resetCooldown()
 }
 
 physics.onWallRun = () => {
-  score++
-  scoreEl.textContent = score
-  if (score > bestScore) {
-    bestScore = score
-    bestEl.textContent = bestScore
-  }
+  trickMultiplier++
+  inTrick = true
+  chainCounterEl.textContent = `x${trickMultiplier}`
+  chainCounterEl.style.opacity = '1'
+  chainDisplayTimer = 2.0
+}
+
+physics.onGrind = () => {
+  trickMultiplier++
+  inTrick = true
+  chainCounterEl.textContent = `x${trickMultiplier}`
+  chainCounterEl.style.opacity = '1'
+  chainDisplayTimer = 2.0
+}
+
+physics.onChain = (combo) => {
+  chainDisplayTimer = 2.0
 }
 
 physics.onGroundHit = () => {
   score = 0
   runTime = 0
   timerStarted = false
+  trickScore = 0
+  trickMultiplier = 1
+  inTrick = false
   scoreEl.textContent = score
   timerEl.textContent = formatTime(0)
   touchedBoxes.clear()
+  chainDisplayTimer = 0
+  chainCounterEl.style.opacity = '0'
+  if (railGrinder.isGrinding) railGrinder.dismount()
   if (cameraController.mode === 'first-person') {
     physics._respawn(humanoid)
     cameraController.resetLook()
@@ -139,6 +194,7 @@ let obstacleHelpers = []
 let ledgeHelpers = []
 let seamHelpers = []
 let issueHelpers = []
+let railHelpers = []
 let hitboxesVisible = false
 let kickHelper = null
 let _prevPW = config.PLAYER_WIDTH, _prevPH = config.PLAYER_HEIGHT
@@ -204,6 +260,20 @@ function rebuildObstacleHelpers() {
       seamHelpers.push(seam)
     }
   }
+  // Rail snap radius visualization — tube showing snap zone
+  railHelpers.forEach(h => { scene.remove(h); h.geometry.dispose() })
+  railHelpers = []
+  const railSnapMat = new THREE.MeshBasicMaterial({ color: 0xffff00, wireframe: true, transparent: true, opacity: 0.25, depthWrite: false })
+  for (const railData of courses.flatMap(c => c.allRails)) {
+    const rd = railData.railDef
+    const segments = Math.max(8, Math.floor(rd.length))
+    const snapTube = new THREE.TubeGeometry(rd.spline, segments, config.RAIL_SNAP_RADIUS, 8, false)
+    const mesh = new THREE.Mesh(snapTube, railSnapMat)
+    mesh.visible = hitboxesVisible
+    scene.add(mesh)
+    railHelpers.push(mesh)
+  }
+
   // Issue markers — red for overlap/clip, yellow for unreachable
   issueHelpers.forEach(h => scene.remove(h))
   issueHelpers = []
@@ -236,6 +306,7 @@ window.addEventListener('keydown', (e) => {
     ledgeHelpers.forEach(h => { h.visible = hitboxesVisible })
     seamHelpers.forEach(h => { h.visible = hitboxesVisible })
     issueHelpers.forEach(h => { h.visible = hitboxesVisible })
+    railHelpers.forEach(h => { h.visible = hitboxesVisible })
     upperHelper.visible = hitboxesVisible
     lowerHelper.visible = hitboxesVisible
   }
@@ -267,6 +338,43 @@ function animate(timestamp) {
   const allWallAABBs = courses.flatMap(c => c.allWallAABBs)
   physics.update(humanoid, moveDir, movement.wDown, movement.sDown, movement.eDown, jumpPressed, delta,
     allObstacles, allWallAABBs)
+
+  // Rail grinding — detect jump-from-grind (physics already transitioned state)
+  if (physics.state !== 'grinding' && railGrinder.isGrinding) {
+    const tangent = railGrinder.dismount()
+    if (tangent) {
+      physics.velocity.set(
+        tangent.x * physics.momentum,
+        physics.velocity.y,
+        tangent.z * physics.momentum
+      )
+    }
+  }
+
+  // Rail grinding — update position along rail or try to mount
+  if (railGrinder.isGrinding) {
+    const result = railGrinder.update(delta, physics.momentum)
+    if (result) {
+      if (result.ended) {
+        physics.exitGrinding(result.tangent)
+      } else {
+        humanoid.position.copy(result.position)
+        // Orient humanoid along rail tangent
+        const lookTarget = result.position.clone().add(result.tangent)
+        const yaw = Math.atan2(-(lookTarget.x - result.position.x), -(lookTarget.z - result.position.z))
+        humanoid.rotation.y = yaw
+      }
+    }
+  } else if (physics.state === 'airborne' && physics.velocity.y <= 0) {
+    // Try to mount a rail
+    for (const railData of courses.flatMap(c => c.allRails)) {
+      if (railGrinder.tryMount(railData, humanoid.position, physics.velocity.y)) {
+        physics.enterGrinding()
+        break
+      }
+    }
+  }
+
   movement.updateMobileState()
   cameraController.updateAutoAim(allObstacles)
   animator.update(delta)
@@ -297,12 +405,39 @@ function animate(timestamp) {
   if (isMobile && movement.started && mobileOverlay && mobileOverlay.style.display !== 'none') {
     mobileOverlay.style.display = 'none'
   }
+  // Trick score accumulation during grinds/wall runs
+  if (physics.state === 'grinding') {
+    trickScore += TRICK_POINTS_PER_SEC_GRIND * delta
+    inTrick = true
+  } else if (physics.state === 'wallrunning') {
+    trickScore += TRICK_POINTS_PER_SEC_WALLRUN * delta
+    inTrick = true
+  }
+
+  // Show active trick score + multiplier
+  if (inTrick && trickScore > 0) {
+    const pending = Math.floor(trickScore * trickMultiplier)
+    chainCounterEl.textContent = `${Math.floor(trickScore)} x${trickMultiplier} = +${pending}`
+    chainCounterEl.style.opacity = '1'
+    chainDisplayTimer = 2.0
+  }
+
   if (!timerStarted && physics.horizontalSpeed > 0.1) timerStarted = true
   if (timerStarted) runTime += delta
   timerEl.textContent = formatTime(runTime)
   speedEl.textContent = physics.horizontalSpeed.toFixed(1)
   airJumpsEl.textContent = physics._airJumpsLeft
   stateEl.textContent = physics.state
+
+  const momentumPct = ((physics.momentum - config.MOMENTUM_MIN) / (config.MOMENTUM_MAX - config.MOMENTUM_MIN)) * 100
+  momentumBar.style.width = `${Math.min(100, Math.max(0, momentumPct))}%`
+  if (chainDisplayTimer > 0) {
+    chainDisplayTimer -= delta
+    if (chainDisplayTimer <= 0) {
+      chainCounterEl.style.opacity = '0'
+    }
+  }
+
   updateGround(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   updateSky(timestamp * 0.001, humanoid.position.x, humanoid.position.y, humanoid.position.z)
   updateRocks(delta, timestamp * 0.001, humanoid.position.x, humanoid.position.z, allObstacles)
