@@ -48,14 +48,14 @@ function clampXAwayFromBillboards(plat, billboards, halfW) {
 
 function nudgeAwayFromAll(plat, allPlatforms, neighborPlatforms, halfW, billboards) {
   const checkList = neighborPlatforms ? allPlatforms.concat(neighborPlatforms) : allPlatforms
-  for (let pass = 0; pass < 5; pass++) {
+  for (let pass = 0; pass < 10; pass++) {
     let moved = false
     for (const other of checkList) {
       if (other === plat) continue
       if (hasOverlap(plat, other)) {
         const overlapX = (plat.w / 2 + other.w / 2) - Math.abs(plat.x - other.x)
         const lateralDir = plat.x >= other.x ? 1 : -1
-        plat.x = Math.round(clamp(plat.x + lateralDir * overlapX * 0.5, -halfW, halfW) * 10) / 10
+        plat.x = Math.round(clamp(plat.x + lateralDir * (overlapX + 0.1), -halfW, halfW) * 10) / 10
         if (billboards) clampXAwayFromBillboards(plat, billboards, halfW)
         if (!hasOverlap(plat, other)) { moved = true; continue }
         const clearZ = other.z - other.d / 2 - plat.d / 2 - config.MIN_PLATFORM_SPACING
@@ -80,7 +80,7 @@ function nudgeAwayFromAll(plat, allPlatforms, neighborPlatforms, halfW, billboar
     if (!moved) break
   }
   // Final guarantee: keep pushing Z backward until no overlaps remain
-  for (let safetyIter = 0; safetyIter < 20; safetyIter++) {
+  for (let safetyIter = 0; safetyIter < 40; safetyIter++) {
     let worstClearZ = plat.z
     for (const other of checkList) {
       if (other === plat) continue
@@ -244,7 +244,7 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
   // Iterate until stable (max 10 passes)
   const absMaxReach = config.DOUBLE_JUMP_HEIGHT * config.PLAT_HEIGHT_FRAC
   const finalClearance = config.BILLBOARD_MIN_CLEARANCE
-  for (let pass = 0; pass < 10; pass++) {
+  for (let pass = 0; pass < 20; pass++) {
     let anyChange = false
 
     // 1. Push platforms out of billboard hitboxes

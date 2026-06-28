@@ -157,8 +157,8 @@ const config = {
   MOUNTAIN_LAYER_COUNT:    3,
   MOUNTAIN_RADIUS_INNER:   80,
   MOUNTAIN_RADIUS_STEP:    30,
-  MOUNTAIN_HEIGHT_MIN:     20,
-  MOUNTAIN_HEIGHT_MAX:     55,
+  MOUNTAIN_HEIGHT_MIN:     50,
+  MOUNTAIN_HEIGHT_MAX:     80,
   MOUNTAIN_SEGMENTS:       128,
 
   // ── spawn platform ────────────────────────────────────────────────────────

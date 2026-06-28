@@ -296,6 +296,6 @@ export function updateMountains(time, playerX, playerZ) {
   for (let i = 0; i < mountainLayers.length; i++) {
     const layer = mountainLayers[i]
     const parallax = 1.0 - i * 0.1
-    layer.mesh.position.set(playerX * parallax, 0, playerZ * parallax)
+    layer.mesh.position.set(playerX, 0, playerZ)
   }
 }

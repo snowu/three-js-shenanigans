@@ -300,7 +300,7 @@ function animate(timestamp) {
   airJumpsEl.textContent = physics._airJumpsLeft
   stateEl.textContent = physics.state
   updateGround(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
-  updateSky(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
+  updateSky(timestamp * 0.001, humanoid.position.x, humanoid.position.y, humanoid.position.z)
   updateRocks(delta, timestamp * 0.001, humanoid.position.x, humanoid.position.z, allObstacles)
   updateMountains(timestamp * 0.001, humanoid.position.x, humanoid.position.z)
   updatePlatformMaterials(timestamp * 0.001)

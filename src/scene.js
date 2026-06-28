@@ -123,9 +123,9 @@ const skyMat = new THREE.ShaderMaterial({
 const skyMesh = new THREE.Mesh(skyGeo, skyMat)
 scene.add(skyMesh)
 
-export function updateSky(time, playerX, playerZ) {
+export function updateSky(time, playerX, playerY, playerZ) {
   skyMat.uniforms.time.value = time
-  skyMesh.position.set(playerX, 0, playerZ)
+  skyMesh.position.set(playerX, playerY, playerZ)
 }
 
 export const timer = new THREE.Timer()
