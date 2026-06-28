@@ -25,6 +25,7 @@ const config = {
   // ── player dimensions ─────────────────────────────────────────────────────
   PLAYER_WIDTH:   0.4,
   PLAYER_HEIGHT:  2.0,
+  PLAYER_SCALE:   1.4,
   HAND_OFFSET_Y:  1.5,
   LEDGE_REACH:    0.4,
   LEDGE_H_MARGIN: 0.3,
@@ -55,7 +56,7 @@ const config = {
   GENERATE_TIME_AHEAD:  2,
 
   // ── rails ───────────────────────────────────────────────────────────────
-  RAIL_RADIUS:             0.05,
+  RAIL_RADIUS:             0.15,
   RAIL_SNAP_RADIUS:        1.2,
   RAIL_SNAP_Y_TOLERANCE:   1.5,
   RAIL_TRACK_SPACING:      0.3,
@@ -131,7 +132,7 @@ const config = {
   TP_CAM_HEIGHT:          3,
   AUTO_AIM_LOOK_AHEAD:    30,
   AUTO_AIM_SKIP_PLATFORMS: 2,
-  AUTO_AIM_LERP_SPEED:    1.5,
+  AUTO_AIM_LERP_SPEED:    0.6,
   AUTO_AIM_STRAFE_BIAS:   0.6,
 
   // ── momentum camera ───────────────────────────────────────────────────

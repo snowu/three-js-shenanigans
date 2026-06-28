@@ -258,8 +258,7 @@ function generateSegmentPlatforms(prevPlatform, segmentStartZ, difficulty = 'med
     if (plat.d < 10) continue
     if (Math.random() > config.RAIL_EDGE_CHANCE) continue
 
-    const side = Math.random() < 0.5 ? -1 : 1
-    const railX = plat.x + side * (plat.w / 2 - 0.2)
+    const railX = plat.x
     const railY = plat.y + plat.h / 2 + 0.3
     const railZ1 = plat.z + plat.d / 2 - 0.5
     const railZ2 = plat.z - plat.d / 2 + 0.5

@@ -77,9 +77,10 @@ export class Physics {
   exitGrinding(tangent) {
     this._state = STATE.AIRBORNE
     if (tangent) {
+      const exitY = tangent.y * this._momentum
       this.velocity.set(
         tangent.x * this._momentum,
-        -2,
+        Math.min(exitY, -5),
         tangent.z * this._momentum
       )
     }

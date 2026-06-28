@@ -356,6 +356,9 @@ function animate(timestamp) {
     const result = railGrinder.update(delta, physics.momentum)
     if (result) {
       if (result.ended) {
+        // Push player forward past rail end so they don't land on the platform
+        humanoid.position.copy(result.position)
+        humanoid.position.addScaledVector(result.tangent, 1.5)
         physics.exitGrinding(result.tangent)
       } else {
         humanoid.position.copy(result.position)

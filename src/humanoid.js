@@ -1,10 +1,12 @@
 import * as THREE from 'three'
+import config from './config.js'
 
 export function createHumanoid() {
   const group = new THREE.Group()
   const mat = new THREE.MeshStandardMaterial({ color: 0x4488ff })
 
   const root = new THREE.Group()
+  root.scale.setScalar(config.PLAYER_SCALE)
   group.add(root)
 
   // Head

@@ -154,9 +154,12 @@ export class CameraController {
       this._aimTarget = new THREE.Vector3(target.x, target.y, target.z)
     }
 
-    const shift = Math.sqrt((target.x - this._aimTarget.x) ** 2 + (target.z - this._aimTarget.z) ** 2)
+    // Blend target X toward player center to keep aim more forward-facing
+    const centeredX = px + (target.x - px) * 0.15
+
+    const shift = Math.sqrt((centeredX - this._aimTarget.x) ** 2 + (target.z - this._aimTarget.z) ** 2)
     if (shift > 3) {
-      this._aimTarget.set(target.x, target.y, target.z)
+      this._aimTarget.set(centeredX, target.y, target.z)
     }
 
     const dx = this._aimTarget.x - px
@@ -165,8 +168,8 @@ export class CameraController {
     const hDist = Math.sqrt(dx * dx + dz * dz)
 
     const targetYaw = Math.atan2(-dx, -dz)
-    const targetPitch = -Math.atan2(dy - 1.75, hDist)
-    const clampedPitch = Math.max(0, Math.min(Math.PI / 3, targetPitch))
+    const targetPitch = -Math.atan2(dy + 0.5, hDist)
+    const clampedPitch = Math.max(-Math.PI / 6, Math.min(Math.PI / 3, targetPitch))
 
     const dt = 0.016
     const t = 1 - Math.exp(-config.AUTO_AIM_LERP_SPEED * dt)
@@ -175,7 +178,7 @@ export class CameraController {
     while (yawDiff < -Math.PI) yawDiff += Math.PI * 2
     this._yaw += yawDiff * t
     this._pitch += (clampedPitch - this._pitch) * t
-    this._pitch = Math.max(0, Math.min(Math.PI / 3, this._pitch))
+    this._pitch = Math.max(-Math.PI / 6, Math.min(Math.PI / 3, this._pitch))
   }
 
   set animator(a) { this._animator = a }

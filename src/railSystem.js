@@ -22,60 +22,30 @@ export function createRailMeshes(railDef) {
   const group = new THREE.Group()
   const neonColor = railDef.isCurved ? config.RAIL_COLOR_CURVED : config.RAIL_COLOR_STRAIGHT
   const segments = Math.max(16, Math.floor(railDef.length * 2))
-  const radius = railDef.isCurved ? config.RAIL_RADIUS * 1.3 : config.RAIL_RADIUS
-
-  const trackOffsets = [-config.RAIL_TRACK_SPACING / 2, config.RAIL_TRACK_SPACING / 2]
+  const radius = config.RAIL_RADIUS
   const railMaterials = []
 
-  for (const offsetX of trackOffsets) {
-    const offsetPoints = railDef.points.map((p, i) => {
-      const t = i / Math.max(1, railDef.points.length - 1)
-      const tangent = railDef.spline.getTangentAt(t)
-      const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize()
-      return new THREE.Vector3(p.x + right.x * offsetX, p.y, p.z + right.z * offsetX)
-    })
+  // Single tube rail
+  const tubeGeo = new THREE.TubeGeometry(railDef.spline, segments, radius, 8, false)
+  const railMat = new THREE.MeshStandardMaterial({
+    color: 0x888899,
+    metalness: 0.8,
+    roughness: 0.2,
+    emissive: neonColor,
+    emissiveIntensity: config.RAIL_EMISSIVE_INTENSITY,
+  })
+  railMaterials.push(railMat)
+  group.add(new THREE.Mesh(tubeGeo, railMat))
 
-    const offsetSpline = new THREE.CatmullRomCurve3(offsetPoints)
-    const tubeGeo = new THREE.TubeGeometry(offsetSpline, segments, radius, 6, false)
-    const railMat = new THREE.MeshStandardMaterial({
-      color: 0x888899,
-      metalness: 0.8,
-      roughness: 0.2,
-      emissive: neonColor,
-      emissiveIntensity: config.RAIL_EMISSIVE_INTENSITY,
-    })
-    railMaterials.push(railMat)
-    const mesh = new THREE.Mesh(tubeGeo, railMat)
-    group.add(mesh)
-  }
-
-  // Neon center strip (glow line along the spline center)
-  const glowGeo = new THREE.TubeGeometry(railDef.spline, segments, radius * 0.4, 4, false)
+  // Inner glow strip
+  const glowGeo = new THREE.TubeGeometry(railDef.spline, segments, radius * 0.5, 6, false)
   const glowMat = new THREE.MeshBasicMaterial({
     color: neonColor,
     transparent: true,
     opacity: 0.6,
   })
   railMaterials.push(glowMat)
-  const glowMesh = new THREE.Mesh(glowGeo, glowMat)
-  group.add(glowMesh)
-
-  // Cross-ties
-  const tieSpacing = railDef.isCurved ? config.RAIL_TIE_SPACING * 0.8 : config.RAIL_TIE_SPACING
-  const tieCount = Math.floor(railDef.length / tieSpacing)
-  const tieMat = new THREE.MeshStandardMaterial({ color: 0x444455, metalness: 0.6, roughness: 0.4 })
-  for (let i = 0; i <= tieCount; i++) {
-    const t = i / Math.max(1, tieCount)
-    const pos = railDef.spline.getPointAt(t)
-    const tangent = railDef.getTangentAt(t)
-    const right = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize()
-
-    const tieGeo = new THREE.BoxGeometry(config.RAIL_TRACK_SPACING + 0.15, 0.04, 0.1)
-    const tie = new THREE.Mesh(tieGeo, tieMat)
-    tie.position.copy(pos)
-    tie.lookAt(pos.clone().add(tangent))
-    group.add(tie)
-  }
+  group.add(new THREE.Mesh(glowGeo, glowMat))
 
   return { group, railDef, railMaterials }
 }
