@@ -11,6 +11,7 @@ const ANIM_STATE = {
   WALLRUN:    'wallrun',
   KICK:       'kick',
   GRINDING:   'grinding',
+  SURFING:    'surfing',
 }
 
 export class HumanoidAnimator {
@@ -34,6 +35,7 @@ export class HumanoidAnimator {
     this.legsVisible = false
     this.cameraRoll = 0
     this.targetFOV = config.MOMENTUM_FOV_MIN
+    this.isSurfing = false
 
     physics.onLand = () => {
       if (this._airborneTimer < 0.1) return
@@ -79,6 +81,8 @@ export class HumanoidAnimator {
     } else if (this._state !== ANIM_STATE.HANGING && this._state !== ANIM_STATE.PULL_UP) {
       if (phys.state === 'pullingUp') {
         this._setState(ANIM_STATE.PULL_UP)
+      } else if (phys.state === 'grinding' && this.isSurfing) {
+        this._setState(ANIM_STATE.SURFING)
       } else if (phys.state === 'grinding') {
         this._setState(ANIM_STATE.GRINDING)
       } else if (phys.state === 'wallrunning') {
@@ -120,6 +124,7 @@ export class HumanoidAnimator {
       case ANIM_STATE.WALLRUN:  this._poseWallRun(); break
       case ANIM_STATE.KICK:     this._poseKick(); break
       case ANIM_STATE.GRINDING: this._poseGrinding(); break
+      case ANIM_STATE.SURFING:  this._poseSurfing(); break
     }
 
     // Camera roll for wall running
@@ -317,6 +322,32 @@ export class HumanoidAnimator {
     this.cameraHandRX = 0.08
     this.cameraHandLY = -0.02 + Math.sin(phase) * 0.005
     this.cameraHandRY = -0.02 + Math.sin(phase + Math.PI) * 0.005
+  }
+
+  _poseSurfing() {
+    this._resetLimbs()
+    const j = this._joints
+    const phase = this._time * 2.5
+
+    // Surf stance — one foot forward, low crouch
+    j.hipL.rotation.x = 0.4
+    j.hipR.rotation.x = 0.7
+    j.root.rotation.y = 0.15
+
+    // Arms out wide for balance like surfing
+    j.shoulderL.rotation.z = 0.9 + Math.sin(phase) * 0.06
+    j.shoulderL.rotation.x = -0.1 + Math.sin(phase * 0.7) * 0.04
+    j.shoulderR.rotation.z = -0.9 + Math.sin(phase + 1) * 0.06
+    j.shoulderR.rotation.x = -0.1 + Math.sin(phase * 0.7 + 1) * 0.04
+
+    j.body.position.y = this._bodyBaseY - 0.06
+
+    // FP: hands out to sides, palms down, subtle wave motion
+    this.cameraYOffset = -0.08
+    this.cameraHandLX = -0.25 + Math.sin(phase * 0.8) * 0.02
+    this.cameraHandLY = -0.15 + Math.sin(phase) * 0.015
+    this.cameraHandRX = 0.25 + Math.sin(phase * 0.8 + 1) * 0.02
+    this.cameraHandRY = -0.15 + Math.sin(phase + 1) * 0.015
   }
 
   _posePullUp() {

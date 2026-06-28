@@ -63,32 +63,83 @@ export class SurferAbility {
     const newTip = this._tipPos.clone().addScaledVector(dir, dist)
     this._tipPos.copy(newTip)
     this._points.push(newTip.clone())
-    this._rebuildMesh()
+    this._buildSurface(this._points)
   }
 
-  _rebuildMesh() {
+  _buildSurface(pts) {
     if (this._tubeMesh) {
       this._group.remove(this._tubeMesh)
       this._tubeMesh.geometry.dispose()
+    }
+    if (this._stripMesh) {
       this._group.remove(this._stripMesh)
       this._stripMesh.geometry.dispose()
     }
 
-    const spline = new THREE.CatmullRomCurve3(this._points)
-    const segments = Math.max(8, this._points.length * 6)
-    const r = config.RAIL_RADIUS
+    const spline = new THREE.CatmullRomCurve3(pts)
+    const segments = Math.max(12, this._points.length * 4)
+    const boardWidth = 1.2
+    const boardThickness = 0.06
 
-    const tubeGeo = new THREE.TubeGeometry(spline, segments, r, 8, false)
-    this._tubeMesh = new THREE.Mesh(tubeGeo, this._tubeMat)
+    // Build flat ribbon geometry along spline
+    const positions = []
+    const normals = []
+    const indices = []
+    const up = new THREE.Vector3(0, 1, 0)
+
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      const pt = spline.getPointAt(t)
+      const tan = spline.getTangentAt(t)
+      const right = new THREE.Vector3().crossVectors(tan, up).normalize().multiplyScalar(boardWidth / 2)
+
+      // Top face vertices
+      positions.push(pt.x - right.x, pt.y + boardThickness, pt.z - right.z)
+      positions.push(pt.x + right.x, pt.y + boardThickness, pt.z + right.z)
+      normals.push(0, 1, 0, 0, 1, 0)
+
+      if (i < segments) {
+        const base = i * 2
+        indices.push(base, base + 2, base + 1)
+        indices.push(base + 1, base + 2, base + 3)
+      }
+    }
+
+    // Bottom face
+    const topVerts = (segments + 1) * 2
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      const pt = spline.getPointAt(t)
+      const tan = spline.getTangentAt(t)
+      const right = new THREE.Vector3().crossVectors(tan, up).normalize().multiplyScalar(boardWidth / 2)
+
+      positions.push(pt.x - right.x, pt.y, pt.z - right.z)
+      positions.push(pt.x + right.x, pt.y, pt.z + right.z)
+      normals.push(0, -1, 0, 0, -1, 0)
+
+      if (i < segments) {
+        const base = topVerts + i * 2
+        indices.push(base, base + 1, base + 2)
+        indices.push(base + 1, base + 3, base + 2)
+      }
+    }
+
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+    geo.setIndex(indices)
+
+    this._tubeMesh = new THREE.Mesh(geo, this._tubeMat)
     this._group.add(this._tubeMesh)
 
-    const stripGeo = new THREE.TubeGeometry(spline, segments, r * 0.45, 4, false)
+    // Glowing edge strip — thin tube along center
+    const stripGeo = new THREE.TubeGeometry(spline, segments, 0.03, 4, false)
     this._stripMesh = new THREE.Mesh(stripGeo, this._stripMat)
-    this._stripMesh.position.y = r * 0.3
+    this._stripMesh.position.y = boardThickness + 0.01
     this._group.add(this._stripMesh)
 
     const railDef = new RailDefinition(
-      this._points.map(p => ({ x: p.x, y: p.y, z: p.z })),
+      pts.map(p => ({ x: p.x, y: p.y, z: p.z })),
       false
     )
     this._railData = { group: this._group, railDef, railMaterials: [this._tubeMat, this._stripMat] }
@@ -118,38 +169,13 @@ export class SurferAbility {
   }
 
   _rebuildWithTip() {
-    if (this._tubeMesh) {
-      this._group.remove(this._tubeMesh)
-      this._tubeMesh.geometry.dispose()
-      this._group.remove(this._stripMesh)
-      this._stripMesh.geometry.dispose()
-    }
-
     const renderPoints = [...this._points]
     const lastAnch = renderPoints[renderPoints.length - 1]
     if (this._tipPos.distanceTo(lastAnch) > 0.05) {
       renderPoints.push(this._tipPos.clone())
     }
     if (renderPoints.length < 2) return
-
-    const spline = new THREE.CatmullRomCurve3(renderPoints)
-    const segments = Math.max(12, renderPoints.length * 4)
-    const r = config.RAIL_RADIUS
-
-    const tubeGeo = new THREE.TubeGeometry(spline, segments, r, 8, false)
-    this._tubeMesh = new THREE.Mesh(tubeGeo, this._tubeMat)
-    this._group.add(this._tubeMesh)
-
-    const stripGeo = new THREE.TubeGeometry(spline, segments, r * 0.45, 4, false)
-    this._stripMesh = new THREE.Mesh(stripGeo, this._stripMat)
-    this._stripMesh.position.y = r * 0.3
-    this._group.add(this._stripMesh)
-
-    const railDef = new RailDefinition(
-      renderPoints.map(p => ({ x: p.x, y: p.y, z: p.z })),
-      false
-    )
-    this._railData = { group: this._group, railDef, railMaterials: [this._tubeMat, this._stripMat] }
+    this._buildSurface(renderPoints)
   }
 
   deactivate() {

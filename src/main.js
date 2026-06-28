@@ -375,19 +375,21 @@ function animate(timestamp) {
     surfer.activate(humanoid.position, cameraController.cameraYaw, cameraController.cameraPitch)
     physics.enterGrinding()
     surfer._riding = true
+    animator.isSurfing = true
   } else if (!movement.qDown && surfer.active) {
     surfer.deactivate()
     if (surfer._riding) {
       surfer._riding = false
+      animator.isSurfing = false
       if (physics.state === 'grinding') {
         physics.exitGrinding(null)
       }
     }
   }
   if (surfer._riding && physics.state !== 'grinding') {
-    // Player jumped off surfer rail
     surfer._riding = false
     surfer.deactivate()
+    animator.isSurfing = false
   }
   if (surfer.active && surfer._riding) {
     surfer.grow(cameraController.cameraYaw, cameraController.cameraPitch, physics.momentum, delta)
