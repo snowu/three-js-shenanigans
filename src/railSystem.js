@@ -25,7 +25,7 @@ export function createRailMeshes(railDef) {
   const radius = config.RAIL_RADIUS
   const railMaterials = []
 
-  // Single tube rail
+  // Main rail tube
   const tubeGeo = new THREE.TubeGeometry(railDef.spline, segments, radius, 8, false)
   const railMat = new THREE.MeshStandardMaterial({
     color: 0x888899,
@@ -37,15 +37,44 @@ export function createRailMeshes(railDef) {
   railMaterials.push(railMat)
   group.add(new THREE.Mesh(tubeGeo, railMat))
 
-  // Inner glow strip
-  const glowGeo = new THREE.TubeGeometry(railDef.spline, segments, radius * 0.5, 6, false)
-  const glowMat = new THREE.MeshBasicMaterial({
+  // Grinding strip on top
+  const stripGeo = new THREE.TubeGeometry(railDef.spline, segments, radius * 0.45, 4, false)
+  const stripMat = new THREE.MeshStandardMaterial({
     color: neonColor,
-    transparent: true,
-    opacity: 0.6,
+    metalness: 0.9,
+    roughness: 0.1,
+    emissive: neonColor,
+    emissiveIntensity: config.RAIL_EMISSIVE_INTENSITY * 0.6,
   })
-  railMaterials.push(glowMat)
-  group.add(new THREE.Mesh(glowGeo, glowMat))
+  railMaterials.push(stripMat)
+  const stripMesh = new THREE.Mesh(stripGeo, stripMat)
+  stripMesh.position.y = radius * 0.3
+  group.add(stripMesh)
+
+  // End caps
+  const capMat = new THREE.MeshStandardMaterial({ color: 0x888899, metalness: 0.8, roughness: 0.3 })
+  const capGeo = new THREE.SphereGeometry(radius * 1.3, 8, 8)
+  const startPos = railDef.spline.getPointAt(0)
+  const endPos = railDef.spline.getPointAt(1)
+  for (const pos of [startPos, endPos]) {
+    const cap = new THREE.Mesh(capGeo, capMat)
+    cap.position.copy(pos)
+    group.add(cap)
+  }
+
+  // Support posts underneath
+  const postMat = new THREE.MeshStandardMaterial({ color: 0x555566, metalness: 0.7, roughness: 0.4 })
+  const postCount = Math.max(2, Math.floor(railDef.length / 3))
+  const postRadius = radius * 0.6
+  for (let i = 0; i <= postCount; i++) {
+    const t = i / postCount
+    const pos = railDef.spline.getPointAt(t)
+    const postHeight = 1.0
+    const postGeo = new THREE.CylinderGeometry(postRadius, postRadius, postHeight, 6)
+    const post = new THREE.Mesh(postGeo, postMat)
+    post.position.set(pos.x, pos.y - postHeight / 2, pos.z)
+    group.add(post)
+  }
 
   return { group, railDef, railMaterials }
 }

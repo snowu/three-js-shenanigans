@@ -88,8 +88,10 @@ const stateEl = document.getElementById('player-state')
 const timerEl = document.getElementById('timer')
 const momentumBar = document.getElementById('momentum-bar')
 const chainCounterEl = document.getElementById('chain-counter')
+const bestMultEl = document.getElementById('best-multiplier')
 let score = 0
 let bestScore = 0
+let bestMultiplier = 1
 let runTime = 0
 let timerStarted = false
 let chainDisplayTimer = 0
@@ -145,9 +147,17 @@ physics.onLand = () => {
   railGrinder.resetCooldown()
 }
 
+function updateBestMultiplier() {
+  if (trickMultiplier > bestMultiplier) {
+    bestMultiplier = trickMultiplier
+    bestMultEl.textContent = bestMultiplier
+  }
+}
+
 physics.onWallRun = () => {
   trickMultiplier++
   inTrick = true
+  updateBestMultiplier()
   chainCounterEl.textContent = `x${trickMultiplier}`
   chainCounterEl.style.opacity = '1'
   chainDisplayTimer = 2.0
@@ -156,6 +166,7 @@ physics.onWallRun = () => {
 physics.onGrind = () => {
   trickMultiplier++
   inTrick = true
+  updateBestMultiplier()
   chainCounterEl.textContent = `x${trickMultiplier}`
   chainCounterEl.style.opacity = '1'
   chainDisplayTimer = 2.0

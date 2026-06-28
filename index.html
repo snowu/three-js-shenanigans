@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>floor-is-lava</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { overflow: hidden; background: #000; touch-action: none; }
@@ -16,19 +19,20 @@
   <body>
     <div id="score-hud" style="
       position: fixed; top: 20px; right: 20px;
-      font-family: monospace; font-size: 24px; color: #fff;
+      font-family: 'Orbitron', monospace; font-size: 24px; color: #fff;
       text-align: right; pointer-events: none; user-select: none;
       text-shadow: 0 0 6px rgba(0,0,0,0.8);
     ">
       <div>Score: <span id="score-current">0</span></div>
       <div style="font-size: 20px; color: #aaa;">Best: <span id="score-best">0</span></div>
+      <div style="font-size: 20px; color: #00ffcc; margin-top: 2px;">Best x<span id="best-multiplier">1</span></div>
       <div style="font-size: 20px; color: #ff0; margin-top: 4px;">Time: <span id="timer">0:00</span></div>
       <button id="help-btn" style="
         display: none;
         margin-top: 8px; margin-left: auto;
         width: 28px; height: 28px;
         background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
-        border-radius: 50%; color: #fff; font-family: monospace; font-size: 14px; font-weight: bold;
+        border-radius: 50%; color: #fff; font-family: 'Orbitron', monospace; font-size: 14px; font-weight: bold;
         cursor: pointer; pointer-events: auto;
         backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
         line-height: 26px; text-align: center; padding: 0;
@@ -43,7 +47,7 @@
       display: none;
       position: fixed; inset: 0;
       justify-content: center; align-items: center;
-      font-family: monospace; color: #fff;
+      font-family: 'Orbitron', monospace; color: #fff;
       pointer-events: none; z-index: 50;
       flex-direction: column; gap: 16px;
       background: rgba(0,0,0,0.5);
@@ -62,7 +66,7 @@
       background: rgba(0,0,0,0.8);
       z-index: 200;
       justify-content: center; align-items: center;
-      font-family: monospace; color: #fff;
+      font-family: 'Orbitron', monospace; color: #fff;
     ">
       <div style="
         background: rgba(30,30,30,0.95); border: 1px solid rgba(255,255,255,0.2);
@@ -83,7 +87,7 @@
           display: block; margin: 20px auto 0;
           padding: 8px 28px;
           background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-          border-radius: 8px; color: #fff; font-family: monospace; font-size: 14px;
+          border-radius: 8px; color: #fff; font-family: 'Orbitron', monospace; font-size: 14px;
           cursor: pointer;
         ">Got it</button>
       </div>
@@ -91,13 +95,13 @@
     <div id="momentum-bar-container" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:200px;height:8px;background:rgba(0,0,0,0.5);border-radius:4px;border:1px solid rgba(255,255,255,0.2);z-index:10">
       <div id="momentum-bar" style="height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,#00ff88,#ffff00,#ff4444);transition:width 0.1s"></div>
     </div>
-    <div id="chain-counter" style="position:fixed;bottom:35px;left:50%;transform:translateX(-50%);color:#00ffcc;font-family:monospace;font-size:14px;z-index:10;opacity:0;transition:opacity 0.3s"></div>
+    <div id="chain-counter" style="position:fixed;bottom:50px;left:50%;transform:translateX(-50%);color:#00ffcc;font-family:monospace;font-size:28px;font-weight:bold;z-index:10;opacity:0;transition:opacity 0.3s;text-shadow:0 0 10px #00ffcc,0 0 20px #00ffcc"></div>
     <button id="cam-mode-btn" style="
       display: none;
       position: fixed; bottom: 16px; right: 16px;
       height: 36px; padding: 0 12px;
       background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-      border-radius: 8px; color: #fff; font-family: monospace; font-size: 14px;
+      border-radius: 8px; color: #fff; font-family: 'Orbitron', monospace; font-size: 14px;
       cursor: pointer; z-index: 100;
       backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     ">FP</button>
