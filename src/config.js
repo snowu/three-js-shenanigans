@@ -74,6 +74,15 @@ const config = {
   RAIL_COLOR_CURVED:       0x00ccff,
   RAIL_EMISSIVE_INTENSITY: 0.4,
 
+  // ── dash (shift boost) ────────────────────────────────────────────────
+  DASH_SPEED:            35,
+  DASH_DURATION:         0.4,
+  DASH_COOLDOWN:         25,
+
+  // ── silver surfer (Q) ─────────────────────────────────────────────────
+  SURFER_RAIL_LENGTH:    8,
+  SURFER_DESPAWN_DELAY:  1.0,
+
   // ── wall run ──────────────────────────────────────────────────────────
   WALLRUN_GRAVITY:         10,
   WALLRUN_JUMP_SPEED:      14,

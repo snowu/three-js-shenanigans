@@ -3,8 +3,9 @@ import { isMobile } from './mobile.js'
 
 export class Movement {
   constructor(physics, joystick) {
-    this._keys = { w: false, a: false, s: false, d: false, e: false }
+    this._keys = { w: false, a: false, s: false, d: false, e: false, shift: false, q: false }
     this._jumpQueued = false
+    this._dashQueued = false
     this._physics = physics
     this._joystick = joystick || null
     this._started = !isMobile
@@ -41,6 +42,8 @@ export class Movement {
       if (e.code === 'KeyS') this._keys.s = true
       if (e.code === 'KeyD') this._keys.d = true
       if (e.code === 'KeyE') this._keys.e = true
+      if (e.code === 'KeyQ') this._keys.q = true
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { this._keys.shift = true; this._dashQueued = true }
       if (e.code === 'Space') { e.preventDefault(); this._jumpQueued = true }
     })
 
@@ -50,6 +53,8 @@ export class Movement {
       if (e.code === 'KeyS') this._keys.s = false
       if (e.code === 'KeyD') this._keys.d = false
       if (e.code === 'KeyE') this._keys.e = false
+      if (e.code === 'KeyQ') this._keys.q = false
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this._keys.shift = false
     })
   }
 
@@ -135,8 +140,11 @@ export class Movement {
   get eDown() { return this._keys.e }
 
   get jumpPressed() { return this._jumpQueued }
+  get dashPressed() { return this._dashQueued }
+  get qDown() { return this._keys.q }
 
   clearJump() { this._jumpQueued = false }
+  clearDash() { this._dashQueued = false }
 
   getMoveDir(cameraYaw) {
     const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw))

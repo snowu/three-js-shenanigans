@@ -10,6 +10,7 @@ import { updatePlatformMaterials } from './platformStyles.js'
 import { updateBillboardMaterials, initSurveillance, createSkyScreens, updateSkyScreens } from './billboardStyles.js'
 import { Physics } from './physics.js'
 import { RailGrinder } from './railSystem.js'
+import { SurferAbility } from './surferAbility.js'
 import { HumanoidAnimator } from './humanoidAnimator.js'
 import { makeWireBox, createPlayerHitboxHelpers, updatePlayerHitboxPositions, createObstacleHitboxHelper } from './hitboxes.js'
 import { createDebugMenu } from './debugMenu.js'
@@ -56,6 +57,7 @@ const cameraController = new CameraController(camera, renderer.domElement, human
 const movement = new Movement(physics, cameraController.joystick)
 const animator = new HumanoidAnimator(joints, physics)
 const railGrinder = new RailGrinder()
+const surfer = new SurferAbility(scene)
 cameraController.animator = animator
 createDebugMenu(animator, scene, courses, { camera, ambientLight, dirLight })
 
@@ -89,6 +91,7 @@ const timerEl = document.getElementById('timer')
 const momentumBar = document.getElementById('momentum-bar')
 const chainCounterEl = document.getElementById('chain-counter')
 const bestMultEl = document.getElementById('best-multiplier')
+const dashIndicatorEl = document.getElementById('dash-indicator')
 let score = 0
 let bestScore = 0
 let bestMultiplier = 1
@@ -192,6 +195,7 @@ physics.onGroundHit = () => {
   chainDisplayTimer = 0
   chainCounterEl.style.opacity = '0'
   if (railGrinder.isGrinding) railGrinder.dismount()
+  surfer.reset()
   if (cameraController.mode === 'first-person') {
     physics._respawn(humanoid)
     cameraController.resetLook()
@@ -359,13 +363,49 @@ function animate(timestamp) {
   const jumpPressed = movement.jumpPressed
   movement.clearJump()
 
+  // Dash (Shift)
+  if (movement.dashPressed) {
+    const facingDir = new THREE.Vector3(-Math.sin(cameraController.cameraYaw), 0, -Math.cos(cameraController.cameraYaw))
+    physics.startDash(facingDir)
+    movement.clearDash()
+  }
+
+  // Silver Surfer (Q)
+  if (movement.qDown && !surfer.active && !railGrinder.isGrinding) {
+    surfer.activate(humanoid.position, cameraController.cameraYaw, cameraController.cameraPitch)
+    physics.enterGrinding()
+    surfer._riding = true
+  } else if (!movement.qDown && surfer.active) {
+    surfer.deactivate()
+    if (surfer._riding) {
+      surfer._riding = false
+      if (physics.state === 'grinding') {
+        physics.exitGrinding(null)
+      }
+    }
+  }
+  if (surfer._riding && physics.state !== 'grinding') {
+    // Player jumped off surfer rail
+    surfer._riding = false
+    surfer.deactivate()
+  }
+  if (surfer.active && surfer._riding) {
+    surfer.grow(cameraController.cameraYaw, cameraController.cameraPitch, physics.momentum, delta)
+    humanoid.position.copy(surfer.tipPos)
+    humanoid.position.y += 0.3
+  }
+  surfer.update(delta)
+
   const allObstacles = cachedObstacles
   const allWallAABBs = cachedWallAABBs
   physics.update(humanoid, moveDir, movement.wDown, movement.sDown, movement.eDown, jumpPressed, delta,
     allObstacles, allWallAABBs)
 
   // Rail grinding — detect jump-from-grind (physics already transitioned state)
-  if (physics.state !== 'grinding' && railGrinder.isGrinding) {
+  // Skip normal rail logic while surfer is riding
+  if (surfer._riding) {
+    // Surfer handles grinding state directly
+  } else if (physics.state !== 'grinding' && railGrinder.isGrinding) {
     const tangent = railGrinder.dismount()
     if (tangent) {
       physics.velocity.set(
@@ -377,7 +417,9 @@ function animate(timestamp) {
   }
 
   // Rail grinding — update position along rail or try to mount
-  if (railGrinder.isGrinding) {
+  if (surfer._riding) {
+    // Surfer bypasses railGrinder
+  } else if (railGrinder.isGrinding) {
     const result = railGrinder.update(delta, physics.momentum)
     if (result) {
       if (result.ended) {
@@ -394,11 +436,20 @@ function animate(timestamp) {
       }
     }
   } else if (physics.state === 'airborne' && physics.velocity.y <= 0) {
-    // Try to mount a rail
-    for (const railData of cachedRails) {
-      if (railGrinder.tryMount(railData, humanoid.position, physics.velocity.y, physics.velocity)) {
+    // Try to mount a rail — check surfer rail first
+    let mounted = false
+    if (surfer.railData) {
+      if (railGrinder.tryMount(surfer.railData, humanoid.position, physics.velocity.y, physics.velocity)) {
         physics.enterGrinding()
-        break
+        mounted = true
+      }
+    }
+    if (!mounted) {
+      for (const railData of cachedRails) {
+        if (railGrinder.tryMount(railData, humanoid.position, physics.velocity.y, physics.velocity)) {
+          physics.enterGrinding()
+          break
+        }
       }
     }
   }
@@ -456,6 +507,19 @@ function animate(timestamp) {
   speedEl.textContent = physics.horizontalSpeed.toFixed(1)
   airJumpsEl.textContent = physics._airJumpsLeft
   stateEl.textContent = physics.state
+
+  // Dash HUD
+  if (physics.dashReady) {
+    dashIndicatorEl.textContent = 'DASH [SHIFT] ✓'
+    dashIndicatorEl.style.color = '#00ffcc'
+  } else if (physics.isDashing) {
+    dashIndicatorEl.textContent = 'DASHING!'
+    dashIndicatorEl.style.color = '#ffff00'
+  } else {
+    const cd = Math.ceil(physics.dashCooldownRemaining)
+    dashIndicatorEl.textContent = `DASH [SHIFT] ${cd}s`
+    dashIndicatorEl.style.color = '#666'
+  }
 
   const momentumPct = ((physics.momentum - config.MOMENTUM_MIN) / (config.MOMENTUM_MAX - config.MOMENTUM_MIN)) * 100
   momentumBar.style.width = `${Math.min(100, Math.max(0, momentumPct))}%`

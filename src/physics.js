@@ -47,6 +47,13 @@ export class Physics {
     this.onChain = null
     this.onGrind = null
     this._wallrunTimer = 0
+
+    // Dash
+    this._dashTimer = 0
+    this._dashCooldown = 0
+    this._dashReady = true
+    this._preDashMomentum = 0
+    this._dashDir = new THREE.Vector3()
   }
 
   get state() { return this._state }
@@ -56,6 +63,9 @@ export class Physics {
   }
 
   get momentum() { return this._momentum }
+  get dashReady() { return this._dashReady }
+  get dashCooldownRemaining() { return this._dashCooldown }
+  get isDashing() { return this._dashTimer > 0 }
   get chainCombo() { return this._chainCombo }
 
   get legsExtended() { return this._legsExtended }
@@ -66,6 +76,22 @@ export class Physics {
   get upperBodyMax() { return config.PLAYER_HEIGHT }
   get lowerBodyMin() { return 0 }
   get lowerBodyMax() { return config.KICK_HIP_Y }
+
+  startDash(facingDir) {
+    if (!this._dashReady || this._dashTimer > 0) return false
+    this._preDashMomentum = this._momentum
+    this._dashTimer = config.DASH_DURATION
+    this._dashCooldown = config.DASH_COOLDOWN
+    this._dashReady = false
+    this._dashDir.copy(facingDir).normalize()
+    this.velocity.set(
+      this._dashDir.x * config.DASH_SPEED,
+      this._dashDir.y * config.DASH_SPEED * 0.3,
+      this._dashDir.z * config.DASH_SPEED
+    )
+    this._state = STATE.AIRBORNE
+    return true
+  }
 
   enterGrinding() {
     this._state = STATE.GRINDING
@@ -186,9 +212,28 @@ export class Physics {
     this._momentum = Math.max(this._momentum, config.MOMENTUM_MIN)
     this._momentum = Math.min(this._momentum, config.MOMENTUM_MAX)
 
+    // Dash cooldown tick
+    if (this._dashCooldown > 0) {
+      this._dashCooldown -= delta
+      if (this._dashCooldown <= 0) {
+        this._dashCooldown = 0
+        this._dashReady = true
+      }
+    }
+    // Dash active — override movement, restore momentum when done
+    if (this._dashTimer > 0) {
+      this._dashTimer -= delta
+      if (this._dashTimer <= 0) {
+        this._dashTimer = 0
+        this._momentum = this._preDashMomentum
+      }
+    }
+
     const currentSpeed = this._momentum
 
-    if (this._state === STATE.HANGING || this._state === STATE.PULLING_UP) {
+    if (this._dashTimer > 0) {
+      // Dashing — don't override velocity
+    } else if (this._state === STATE.HANGING || this._state === STATE.PULLING_UP) {
       this.velocity.set(0, 0, 0)
     } else if (this._state === STATE.GRINDING) {
       // Grinding velocity handled by railSystem — don't override here
@@ -544,6 +589,9 @@ export class Physics {
     this._chainTimer = 0
     this._chainCombo = 0
     this._wallrunTimer = 0
+    this._dashTimer = 0
+    this._dashCooldown = 0
+    this._dashReady = true
   }
 
   static spawnPosition() {

@@ -91,6 +91,7 @@ export class CameraController {
   get joystick() { return this._joystick }
 
   get cameraYaw() { return this._yaw }
+  get cameraPitch() { return this._pitch }
 
   resetLook() {
     this._yaw = 0
