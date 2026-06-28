@@ -30,6 +30,8 @@ const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1)
 const unitPlaneGeo = new THREE.PlaneGeometry(1, 1)
 const unitCylinderGeo = new THREE.CylinderGeometry(0.3, 1, 1, 6)
 const thinCylinderGeo = new THREE.CylinderGeometry(0.2, 1, 1, 6)
+const craterGeo = new THREE.CylinderGeometry(1, 1, 1, 12)
+const craterRimGeo = new THREE.TorusGeometry(1, 0.15, 6, 12)
 
 // ── Volcanic Rock ──────────────────────────────────────────────────────────
 
@@ -113,30 +115,34 @@ function buildVolcanic(b) {
     [-b.w * 0.1, -b.d * 0.1, 0.4],
     [b.w * 0.35, b.d * 0.05, 0.55],
   ]
-  for (const [dx, dz, h] of dripOffsets) {
+  for (let i = 0; i < dripOffsets.length; i++) {
+    const [dx, dz, h] = dripOffsets[i]
     const r = 0.04 + Math.abs(dx) * 0.02
     const drip = new THREE.Mesh(unitCylinderGeo, volcanicDripMat)
-    drip.scale.set(r, h, r)
-    drip.position.set(b.x + dx, botY - h / 2, b.z + dz)
+    drip.scale.set(r, 0, r)
+    drip.position.set(b.x + dx, botY, b.z + dz)
     meshes.push(drip)
 
     const blob = new THREE.Mesh(blobGeo, volcanicBlobMat)
-    blob.position.set(b.x + dx, botY - h, b.z + dz)
+    blob.position.set(b.x + dx, botY, b.z + dz)
+    blob.visible = false
     meshes.push(blob)
+
+    const speed = 0.3 + i * 0.08
+    const phase = i * 0.25
+    registerDrip(drip, blob, botY, h, speed, phase)
   }
 
   const topY = b.y + b.h / 2
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2 + b.x * 0.5
-    const dist = Math.max(b.w, b.d) * 0.5 + 0.1 + (Math.sin(i * 7.3 + b.z) * 0.5 + 0.5) * 0.3
+  for (let i = 0; i < 5; i++) {
+    const hash1 = Math.sin(i * 7.3 + b.x * 3.1 + b.z * 1.7) * 0.5 + 0.5
+    const hash2 = Math.sin(i * 13.7 + b.x * 2.3 + b.z * 5.1) * 0.5 + 0.5
+    const dx = (hash1 - 0.5) * b.w * 0.85
+    const dz = (hash2 - 0.5) * b.d * 0.85
     const debris = new THREE.Mesh(debrisGeo, volcanicDebrisMat)
-    debris.position.set(
-      b.x + Math.cos(angle) * dist * (b.w / b.d),
-      topY + (Math.sin(i * 3.1 + b.x) * 0.5 + 0.5) * 0.05,
-      b.z + Math.sin(angle) * dist * (b.d / b.w)
-    )
+    debris.position.set(b.x + dx, topY + 0.03, b.z + dz)
     debris.rotation.set(i * 1.1, i * 0.7, i * 0.5)
-    const s = 0.6 + (Math.sin(i * 5.3) * 0.5 + 0.5) * 0.8
+    const s = 0.6 + hash1 * 0.8
     debris.scale.setScalar(s)
     meshes.push(debris)
   }
@@ -147,24 +153,82 @@ function buildVolcanic(b) {
 // ── Ancient Stone Ruins ────────────────────────────────────────────────────
 
 const ruinsStoneMat = new THREE.MeshStandardMaterial({ color: 0x6b6355, roughness: 0.92, metalness: 0.02 })
-const ruinsCharredMat = new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.95 })
-const ruinsMossMat = new THREE.MeshStandardMaterial({ color: 0x3d5c3a, roughness: 0.9 })
+const ruinsCharredMat = new THREE.MeshStandardMaterial({ color: 0x56432e, roughness: 0.92 })
+const MOSS_VERT = `
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+const MOSS_FRAG = `
+  ${SNOISE_GLSL}
+  varying vec2 vUv;
+  void main(){
+    vec2 centered = (vUv - 0.5) * 2.0;
+    float dist = length(centered);
+    float noise = snoise(vUv * 4.0) * 0.3;
+    float mask = 1.0 - smoothstep(0.3 + noise, 0.9 + noise * 0.5, dist);
+    vec3 darkGreen = vec3(0.15, 0.28, 0.1);
+    vec3 lightGreen = vec3(0.3, 0.45, 0.18);
+    float n = snoise(vUv * 6.0 + 1.5) * 0.5 + 0.5;
+    vec3 color = mix(darkGreen, lightGreen, n);
+    if (mask < 0.01) discard;
+    gl_FragColor = vec4(color, mask * 0.85);
+  }
+`
+const ruinsMossMat = new THREE.ShaderMaterial({
+  vertexShader: MOSS_VERT,
+  fragmentShader: MOSS_FRAG,
+  transparent: true, depthWrite: false, side: THREE.DoubleSide,
+})
 const ruinsGoldTrimMat = new THREE.MeshStandardMaterial({
   color: 0x9a8860, roughness: 0.5, metalness: 0.6, emissive: 0x4a3820, emissiveIntensity: 0.2,
 })
-const ruinsCrackMat = new THREE.MeshStandardMaterial({ color: 0x111008, roughness: 1 })
+const ruinsCrackMat = new THREE.MeshStandardMaterial({ color: 0x55432f, roughness: 0.9 })
+
+const SCORCH_VERT = `
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`
+const SCORCH_FRAG = `
+  ${SNOISE_GLSL}
+  varying vec2 vUv;
+  void main(){
+    vec2 centered = (vUv - 0.5) * 2.0;
+    float dist = length(centered);
+    float noise = snoise(vUv * 5.0) * 0.2;
+    float ring = smoothstep(0.3 + noise, 0.6 + noise, dist) * (1.0 - smoothstep(0.7 + noise, 1.0 + noise, dist));
+    float inner = 1.0 - smoothstep(0.0, 0.4 + noise, dist);
+    vec3 scorchDark = vec3(0.25, 0.18, 0.1);
+    vec3 scorchMid = vec3(0.38, 0.28, 0.16);
+    vec3 color = mix(scorchDark, scorchMid, ring);
+    float alpha = max(inner * 0.6, ring * 0.45);
+    alpha *= 1.0 - smoothstep(0.8 + noise, 1.0, dist);
+    if (alpha < 0.01) discard;
+    gl_FragColor = vec4(color, alpha);
+  }
+`
+const ruinsScorchMat = new THREE.ShaderMaterial({
+  vertexShader: SCORCH_VERT,
+  fragmentShader: SCORCH_FRAG,
+  transparent: true, depthWrite: false, side: THREE.DoubleSide,
+})
 const ruinsRubbleMat = new THREE.MeshStandardMaterial({ color: 0x8a7d6b, roughness: 0.9 })
 
 function buildRuins(b) {
   const meshes = []
   const halfW = b.w / 2, halfD = b.d / 2
+  const topY = b.y + b.h / 2
 
   const mainMesh = new THREE.Mesh(unitBoxGeo, ruinsStoneMat)
   mainMesh.scale.set(b.w, b.h, b.d)
   mainMesh.position.set(b.x, b.y, b.z)
   meshes.push(mainMesh)
 
-  const topY = b.y + b.h / 2
   const trimH = 0.04
   const trimInset = 0.06
 
@@ -182,33 +246,106 @@ function buildRuins(b) {
   }
 
   const mossData = [
-    [0.2 * b.w, 0.25 * b.d, 0.15 * b.w, 0.12 * b.d],
-    [-0.25 * b.w, -0.15 * b.d, 0.12 * b.w, 0.1 * b.d],
-    [0.05 * b.w, -0.35 * b.d, 0.1 * b.w, 0.08 * b.d],
+    [0.2 * b.w, 0.25 * b.d, 0.4],
+    [-0.25 * b.w, -0.15 * b.d, 0.22],
+    [0.05 * b.w, -0.35 * b.d, 0.3],
+    [-0.1 * b.w, 0.35 * b.d, 0.16],
   ]
-  for (const [dx, dz, mw, md] of mossData) {
-    const moss = new THREE.Mesh(unitBoxGeo, ruinsMossMat)
-    moss.scale.set(mw, 0.03, md)
-    moss.position.set(b.x + dx, topY + 0.015, b.z + dz)
+  for (const [dx, dz, radius] of mossData) {
+    const moss = new THREE.Mesh(unitPlaneGeo, ruinsMossMat)
+    moss.scale.set(radius * 2, radius * 2, 1)
+    moss.rotation.x = -Math.PI / 2
+    moss.position.set(b.x + dx, topY + 0.012, b.z + dz)
     meshes.push(moss)
   }
 
-  const crack1 = new THREE.Mesh(unitBoxGeo, ruinsCrackMat)
-  crack1.scale.set(0.02, b.h + 0.02, b.d * 0.8)
-  crack1.position.set(b.x + b.w * 0.13, b.y, b.z)
-  crack1.rotation.y = 0.15
-  meshes.push(crack1)
-  const crack2 = new THREE.Mesh(unitBoxGeo, ruinsCrackMat)
-  crack2.scale.set(0.02, b.h + 0.02, b.d * 0.3)
-  crack2.position.set(b.x + b.w * 0.2, b.y, b.z + b.d * 0.15)
-  crack2.rotation.y = -0.8
-  meshes.push(crack2)
+  const craterData = [
+    [-0.15 * b.w, 0.15 * b.d, 0.2],
+    [0.2 * b.w, -0.2 * b.d, 0.15],
+  ]
+  for (const [cx, cz, cr] of craterData) {
+    const pit = new THREE.Mesh(craterGeo, ruinsCharredMat)
+    pit.scale.set(cr, 0.015, cr)
+    pit.position.set(b.x + cx, topY + 0.005, b.z + cz)
+    meshes.push(pit)
+    const rim = new THREE.Mesh(craterRimGeo, ruinsRubbleMat)
+    rim.scale.set(cr, cr, 0.15)
+    rim.rotation.x = -Math.PI / 2
+    rim.position.set(b.x + cx, topY + 0.012, b.z + cz)
+    meshes.push(rim)
 
-  for (const [dx, dz] of [[-0.15 * b.w, 0.15 * b.d], [0.25 * b.w, -0.2 * b.d]]) {
-    const scorch = new THREE.Mesh(unitBoxGeo, ruinsCharredMat)
-    scorch.scale.set(b.w * 0.25, 0.05, b.d * 0.2)
-    scorch.position.set(b.x + dx, b.y - b.h / 2 + 0.025, b.z + dz)
+    const scorch = new THREE.Mesh(unitPlaneGeo, ruinsScorchMat)
+    scorch.scale.set(cr * 5, cr * 5, 1)
+    scorch.rotation.x = -Math.PI / 2
+    scorch.position.set(b.x + cx, topY + 0.008, b.z + cz)
     meshes.push(scorch)
+  }
+
+  // Cracks — jagged segmented lines
+  {
+    const seed = b.x * 7.3 + b.z * 11.1
+    const hash = (n) => (Math.sin(seed + n * 13.7) * 43758.5453 % 1 + 1) % 1
+
+    const addCrackSeg = (x, z, nx, nz) => {
+      const dx = nx - x, dz = nz - z
+      const len = Math.sqrt(dx * dx + dz * dz)
+      if (len < 0.001) return
+      const angle = Math.atan2(dz, dx)
+      const w = 0.013 + hash(x * 10 + z * 7) * 0.008
+      const seg = new THREE.Mesh(unitBoxGeo, ruinsCrackMat)
+      seg.scale.set(w, 0.02, len)
+      seg.position.set((x + nx) / 2, topY + 0.008, (z + nz) / 2)
+      seg.rotation.y = -angle + Math.PI / 2
+      meshes.push(seg)
+    }
+
+    const walkCrack = (startX, startZ, endX, endZ, steps, jitter) => {
+      let cx = startX, cz = startZ
+      for (let i = 0; i < steps; i++) {
+        const t = (i + 1) / steps
+        const goalX = startX + (endX - startX) * t
+        const goalZ = startZ + (endZ - startZ) * t
+        const jx = (hash(i * 3 + jitter) - 0.5) * b.w * 0.12
+        const jz = (hash(i * 5 + jitter + 20) - 0.5) * b.d * 0.08
+        const nx = goalX + (i < steps - 1 ? jx : 0)
+        const nz = goalZ + (i < steps - 1 ? jz : 0)
+        addCrackSeg(cx, cz, nx, nz)
+        cx = nx
+        cz = nz
+      }
+      return { x: cx, z: cz }
+    }
+
+    // Start: lower-right corner
+    const startX = b.x + halfW * 0.85
+    const startZ = b.z + halfD * 0.85
+    // Split point: 60% depth, near center X
+    const splitX = b.x + halfW * 0.1
+    const splitZ = b.z + halfD * 0.85 - b.d * 0.6
+
+    const trunkSegs = 4
+    const sp = walkCrack(startX, startZ, splitX, splitZ, trunkSegs, 0)
+
+    const endAX = b.x - halfW * 0.3
+    const endAZ = b.z - halfD * 0.85
+    walkCrack(sp.x, sp.z, endAX, endAZ, 3, 100)
+
+    const endBX = b.x + halfW * 0.5
+    const endBZ = b.z - halfD * 0.2
+    walkCrack(sp.x, sp.z, endBX, endBZ, 2, 200)
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const hash1 = Math.sin(i * 7.3 + b.x * 3.1 + b.z * 1.7) * 0.5 + 0.5
+    const hash2 = Math.sin(i * 13.7 + b.x * 2.3 + b.z * 5.1) * 0.5 + 0.5
+    const dx = (hash1 - 0.5) * b.w * 0.8
+    const dz = (hash2 - 0.5) * b.d * 0.8
+    const s = 0.06 + hash1 * 0.08
+    const rubble = new THREE.Mesh(unitBoxGeo, ruinsRubbleMat)
+    rubble.scale.set(s, s * 0.6, s * 0.9)
+    rubble.position.set(b.x + dx, topY + s * 0.3, b.z + dz)
+    rubble.rotation.set(i * 0.8, i * 1.3, i * 0.5)
+    meshes.push(rubble)
   }
 
   const rubbleData = [
@@ -376,25 +513,63 @@ function buildMetal(b, globalIndex) {
     [-0.2 * b.w, -halfD, 0.03, 0.6],
     [0.35 * b.w, 0.25 * b.d, 0.03, 0.35],
   ]
-  for (const [dx, dz, r, h] of dripData) {
+  const metalBotY = b.y - b.h / 2
+  for (let i = 0; i < dripData.length; i++) {
+    const [dx, dz, r, h] = dripData[i]
     const drip = new THREE.Mesh(thinCylinderGeo, metalToxicDripMat)
-    drip.scale.set(r, h, r)
-    drip.position.set(b.x + dx, b.y - b.h / 2 - h / 2, b.z + dz)
+    drip.scale.set(r, 0, r)
+    drip.position.set(b.x + dx, metalBotY, b.z + dz)
     meshes.push(drip)
 
     const blob = new THREE.Mesh(blobGeo, metalToxicBlobMat)
     blob.scale.setScalar(r * 2 / 0.06)
-    blob.position.set(b.x + dx, b.y - b.h / 2 - h - r, b.z + dz)
+    blob.position.set(b.x + dx, metalBotY, b.z + dz)
+    blob.visible = false
     meshes.push(blob)
+
+    const speed = 0.25 + i * 0.1
+    const phase = i * 0.33
+    registerDrip(drip, blob, metalBotY, h, speed, phase)
   }
 
   return { meshes, mainMesh, update: null }
+}
+
+// ── Drip animation registry ───────────────────────────────────────────────
+const activeDrips = []
+
+function registerDrip(dripMesh, blobMesh, baseY, hangLen, speed, phase) {
+  activeDrips.push({ drip: dripMesh, blob: blobMesh, baseY, hangLen, speed, phase })
 }
 
 // ── Global update for all animated materials ──────────────────────────────
 export function updatePlatformMaterials(time) {
   volcanicMat.uniforms.time.value = time
   for (const m of puddlePool) m.uniforms.time.value = time
+
+  for (const d of activeDrips) {
+    const t = ((time * d.speed + d.phase) % 1 + 1) % 1
+    if (t < 0.6) {
+      const grow = t / 0.6
+      d.drip.scale.y = d.hangLen * grow
+      d.drip.position.y = d.baseY - (d.hangLen * grow) / 2
+      d.blob.position.y = d.baseY - d.hangLen * grow
+      d.blob.visible = true
+      d.blob.scale.setScalar(0.8 + grow * 0.4)
+    } else if (t < 0.85) {
+      const drop = (t - 0.6) / 0.25
+      d.drip.scale.y = d.hangLen
+      d.drip.position.y = d.baseY - d.hangLen / 2
+      d.blob.position.y = d.baseY - d.hangLen - drop * 1.2
+      d.blob.visible = true
+      d.blob.scale.setScalar((1 - drop) * 1.2)
+    } else {
+      const pause = (t - 0.85) / 0.15
+      d.drip.scale.y = d.hangLen * (1 - pause)
+      d.drip.position.y = d.baseY - (d.hangLen * (1 - pause)) / 2
+      d.blob.visible = false
+    }
+  }
 }
 
 // ── Factory ────────────────────────────────────────────────────────────────
