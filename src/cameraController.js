@@ -238,6 +238,9 @@ export class CameraController {
   update() {
     const h = this._humanoid
 
+    // Hide model in FP to prevent clipping
+    if (h.children[0]) h.children[0].visible = this.mode !== 'first-person'
+
     if (this.mode === 'first-person') {
       const a = this._animator
       const eyeY = h.position.y + 1.75 + (a ? a.cameraYOffset : 0)
