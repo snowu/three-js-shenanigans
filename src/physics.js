@@ -250,7 +250,7 @@ export class Physics {
     // 4. Sub-stepped integration + collision to prevent tunneling at high speeds
     const speed = this.velocity.length()
     const maxStep = config.PLAYER_WIDTH * 0.4
-    const subSteps = speed * delta > maxStep ? Math.ceil(speed * delta / maxStep) : 1
+    const subSteps = Math.min(speed * delta > maxStep ? Math.ceil(speed * delta / maxStep) : 1, 8)
     const subDelta = delta / subSteps
 
     let touchingWall = false

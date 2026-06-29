@@ -632,10 +632,12 @@ export class BillboardTestCourse {
     const targetSegment = Math.floor(-targetZ / this._zSpacing)
     const added = []
 
-    while (this._nextSegmentIndex <= targetSegment) {
+    let generated = 0
+    while (this._nextSegmentIndex <= targetSegment && generated < 3) {
       const seg = this._createSegment(THREE)
       this._segments.push(seg)
       for (const m of seg.meshes) { scene.add(m); added.push(m) }
+      generated++
     }
     return { added, removed: [] }
   }
@@ -741,10 +743,12 @@ export class CourseManager {
     const targetSegment = Math.floor(-targetZ / config.SEGMENT_DEPTH)
     const added = []
 
-    while (this._nextSegmentIndex <= targetSegment) {
+    let generated = 0
+    while (this._nextSegmentIndex <= targetSegment && generated < 3) {
       const seg = this._createSegment(THREE)
       this._segments.push(seg)
       for (const m of seg.meshes) { scene.add(m); added.push(m) }
+      generated++
     }
 
     // Hide/show segments based on distance — keep all for respawn
