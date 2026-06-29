@@ -121,7 +121,9 @@
         document.getElementById('cam-mode-btn').style.display = 'block';
       }
 
-      if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      var _hasTouchUA = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(navigator.userAgent);
+      var _isCoarse = window.matchMedia('(pointer: coarse)').matches;
+      if (_hasTouchUA && _isCoarse) {
         document.getElementById('mobile-overlay').style.display = 'flex';
         var helpBtn = document.getElementById('help-btn');
         var helpModal = document.getElementById('help-modal');
