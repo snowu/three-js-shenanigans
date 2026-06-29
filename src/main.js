@@ -332,10 +332,23 @@ window.addEventListener('keydown', (e) => {
   }
 })
 
+let _paused = false
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    _paused = true
+  }
+})
+
 function animate(timestamp) {
   requestAnimationFrame(animate)
   timer.update(timestamp)
-  const delta = timer.getDelta()
+  const rawDelta = timer.getDelta()
+  if (_paused || rawDelta > 0.5) {
+    _paused = false
+    renderer.render(scene, camera)
+    return
+  }
+  const delta = Math.min(rawDelta, 0.05)
 
   // Generate segments for all courses
   const currentSpeed = Math.sqrt(physics.velocity.x ** 2 + physics.velocity.z ** 2)
